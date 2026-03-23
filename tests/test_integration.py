@@ -6,11 +6,16 @@ Tests are skipped automatically when the file is not available.
 
 from __future__ import annotations
 
+import io
+import lzma
+import tarfile
+import tempfile
 from pathlib import Path
 
 import pytest
 
 from tools.build import build_firmware
+from tools.deb import parse_deb
 from tools.extract import extract_deb
 from tools.validate import validate_deb
 
@@ -100,3 +105,65 @@ def test_validate_stock_firmware() -> None:
     """Stock firmware file must pass validation on its own."""
     errors = validate_deb(STOCK_FIRMWARE)
     assert errors == [], f"Stock firmware must be valid, got errors: {errors}"
+
+
+def test_phase1_patches_in_built_deb():
+    """All Phase 1 patch files must be present in a built deb's archives."""
+    patches = PROJECT_ROOT / "patches"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        base = tmp / "base"
+
+        # Minimal fake base
+        ctrl = base / "control"
+        ctrl.mkdir(parents=True)
+        (ctrl / "control").write_text("Package: qd-q1-soc\nVersion: 4.4.24\n")
+        (ctrl / "postinst").write_text("#!/bin/sh\n# STOCK\nexit 0\n")
+        data = base / "data"
+        version_dir = data / "root" / "xindi"
+        version_dir.mkdir(parents=True)
+        (version_dir / "version").write_text(
+            "[version]\nmcu = V0.10.0\nui = V4.4.24\nsoc = V4.4.24\n"
+        )
+        (base / "debian-binary").write_text("2.0\n")
+
+        output = tmp / "dist" / "QD_Q1_SOC"
+        output.parent.mkdir(parents=True)
+        build_firmware(base, OVERLAY_DIR, patches, output, q1libre_version="0.1.0-test")
+
+        parts = parse_deb(output.read_bytes())
+
+        # ── data.tar.xz checks ──
+        with lzma.open(io.BytesIO(parts["data.tar.xz"].data)) as lz:
+            with tarfile.open(fileobj=io.BytesIO(lz.read())) as tf:
+                data_names = tf.getnames()
+                moonraker_content = tf.extractfile(
+                    next(m for m in tf.getmembers() if "moonraker.conf" in m.name)
+                ).read().decode()
+                bashrc_content = tf.extractfile(
+                    next(m for m in tf.getmembers() if ".bashrc" in m.name)
+                ).read().decode()
+
+        assert any("moonraker.conf" in n for n in data_names), "moonraker.conf missing from data"
+        assert any(".bashrc" in n for n in data_names), ".bashrc missing from data"
+        assert any("sudoers.d/q1libre" in n for n in data_names), "sudoers q1libre missing from data"
+        assert any("logrotate" in n for n in data_names), "logrotate config missing from data"
+        assert any("q1libre_info.sh" in n for n in data_names), "q1libre_info.sh missing from data"
+
+        # moonraker.conf must have mainsail
+        assert "[update_manager mainsail]" in moonraker_content
+
+        # .bashrc must have aliases
+        assert "alias klog=" in bashrc_content
+        assert "alias krestart=" in bashrc_content
+
+        # ── control.tar.xz checks ──
+        with lzma.open(io.BytesIO(parts["control.tar.xz"].data)) as lz:
+            with tarfile.open(fileobj=io.BytesIO(lz.read())) as tf:
+                postinst = tf.extractfile("./postinst").read().decode()
+
+        assert "chmod 777" not in postinst, "chmod 777 must not be in postinst"
+        assert "resolv.conf" not in postinst, "hardcoded DNS must not be in postinst"
+        assert "sysctl.conf" not in postinst, "IPv6 disable must not be in postinst"
+        assert "q1libre_version.txt" in postinst, "Q1Libre marker must be in postinst"
