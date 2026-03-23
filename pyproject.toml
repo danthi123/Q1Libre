@@ -1,0 +1,12 @@
+[project]
+name = "q1libre"
+version = "0.1.0"
+description = "Open firmware patches for the Qidi Q1 Pro"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+
+[project.scripts]
+q1libre-extract = "tools.extract:main"
+q1libre-build = "tools.build:main"
+q1libre-validate = "tools.validate:main"
+q1libre-diff = "tools.diff:main"
