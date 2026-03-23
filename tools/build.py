@@ -74,17 +74,21 @@ def build_firmware(
         shutil.copytree(base_dir / "data", work / "data")
         shutil.copytree(base_dir / "control", work / "control")
 
-        # 2. Apply overlays — copy each file into the matching data/ path
+        # 2. Apply overlays — copy each file into the matching data/ path,
+        #    but skip anything under overlay/control/ (those belong in control.tar.xz,
+        #    not data.tar.xz, and are handled separately in step 2b).
+        control_overlay = overlay_dir / "control"
         if overlay_dir.is_dir():
             for src_file in overlay_dir.rglob("*"):
                 if src_file.is_file():
+                    if control_overlay.is_dir() and src_file.is_relative_to(control_overlay):
+                        continue
                     rel = src_file.relative_to(overlay_dir)
                     dest = work / "data" / rel
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src_file, dest)
 
         # 2b. Apply control overlays (overlay/control/ → work/control/)
-        control_overlay = overlay_dir / "control"
         if control_overlay.is_dir():
             for src in control_overlay.rglob("*"):
                 if src.is_file():
