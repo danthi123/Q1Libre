@@ -6,11 +6,6 @@ if [ -f /etc/bash.bashrc ]; then
     . /etc/bash.bashrc
 fi
 
-# Source system profile
-if [ -f /etc/profile ]; then
-    . /etc/profile
-fi
-
 # ── Q1Libre aliases ──────────────────────────────────────────────────────────
 
 # Tail the Klipper log (last 50 lines, follow)
