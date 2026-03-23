@@ -1,0 +1,9 @@
+# Q1Libre sudoers additions
+# Allows mks user to restart klipper/moonraker without a password
+# This is required for the shell aliases (krestart, mrestart, kmrestart)
+
+mks ALL=(ALL) NOPASSWD: /bin/systemctl restart klipper.service
+mks ALL=(ALL) NOPASSWD: /bin/systemctl restart moonraker.service
+mks ALL=(ALL) NOPASSWD: /bin/systemctl restart klipper.service moonraker.service
+mks ALL=(ALL) NOPASSWD: /bin/systemctl status klipper.service
+mks ALL=(ALL) NOPASSWD: /bin/systemctl status moonraker.service
