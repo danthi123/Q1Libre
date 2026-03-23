@@ -1,0 +1,128 @@
+"""Tests for version handling and firmware build pipeline."""
+
+import io
+import lzma
+import tarfile
+import tempfile
+from pathlib import Path
+
+from tools.version import read_version, write_version
+from tools.build import build_firmware
+from tools.deb import parse_ar_archive
+
+
+def test_read_write_version():
+    """Create a version file, read it, update soc, verify preservation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        vfile = Path(tmpdir) / "version"
+        vfile.write_text(
+            "[version]\n"
+            "mcu             = V0.10.0\n"
+            "ui              = V4.4.24\n"
+            "soc             = V4.4.24\n"
+        )
+
+        info = read_version(vfile)
+        assert info["mcu"] == "V0.10.0"
+        assert info["ui"] == "V4.4.24"
+        assert info["soc"] == "V4.4.24"
+
+        write_version(vfile, soc="V4.4.24-q1libre0.1.0")
+
+        info2 = read_version(vfile)
+        assert info2["soc"] == "V4.4.24-q1libre0.1.0"
+        assert info2["mcu"] == "V0.10.0"
+        assert info2["ui"] == "V4.4.24"
+
+
+def test_build_produces_valid_deb():
+    """Build from a fake base/ directory with overlay, verify output."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        base = tmp / "base"
+        overlay = tmp / "overlay"
+        output = tmp / "dist" / "QD_Q1_SOC"
+
+        # --- Create fake base directory ---
+        # control files
+        ctrl = base / "control"
+        ctrl.mkdir(parents=True)
+        (ctrl / "control").write_text("Package: qd-q1-soc\nVersion: 4.4.24\n")
+        (ctrl / "postinst").write_text("#!/bin/sh\nexit 0\n")
+        (ctrl / "preinst").write_text("#!/bin/sh\nexit 0\n")
+        (ctrl / "postrm").write_text("#!/bin/sh\nexit 0\n")
+
+        # data files
+        data = base / "data"
+        version_dir = data / "root" / "xindi"
+        version_dir.mkdir(parents=True)
+        (version_dir / "version").write_text(
+            "[version]\n"
+            "mcu             = V0.10.0\n"
+            "ui              = V4.4.24\n"
+            "soc             = V4.4.24\n"
+        )
+
+        moonraker_dir = data / "home" / "mks" / "klipper_config"
+        moonraker_dir.mkdir(parents=True)
+        (moonraker_dir / "moonraker.conf").write_text("# stock moonraker config\n")
+
+        # debian-binary
+        (base / "debian-binary").write_text("2.0\n")
+
+        # --- Create overlay ---
+        overlay_moonraker = overlay / "home" / "mks" / "klipper_config"
+        overlay_moonraker.mkdir(parents=True)
+        (overlay_moonraker / "moonraker.conf").write_text(
+            "# q1libre patched moonraker config\n"
+        )
+
+        # --- Build ---
+        patches = tmp / "patches"
+        patches.mkdir()
+
+        build_firmware(
+            base_dir=base,
+            overlay_dir=overlay,
+            patches_dir=patches,
+            output_path=output,
+            q1libre_version="0.1.0",
+        )
+
+        # --- Verify output ---
+        assert output.exists()
+        assert output.stat().st_size > 0
+
+        # Parse the ar archive
+        raw = output.read_bytes()
+        members = parse_ar_archive(raw)
+        names = [m.name for m in members]
+        assert "debian-binary" in names
+        assert "control.tar.xz" in names
+        assert "data.tar.xz" in names
+
+        # Extract data.tar.xz and check overlay was applied
+        data_member = next(m for m in members if m.name == "data.tar.xz")
+        data_bytes = lzma.decompress(data_member.data)
+        with tarfile.open(fileobj=io.BytesIO(data_bytes), mode="r") as tf:
+            member_names = tf.getnames()
+
+            # Check overlayed moonraker.conf
+            moonraker_path = "./home/mks/klipper_config/moonraker.conf"
+            assert moonraker_path in member_names
+            f = tf.extractfile(moonraker_path)
+            assert f is not None
+            content = f.read().decode()
+            assert "q1libre patched" in content
+
+            # Check version file has q1libre marker
+            version_path = "./root/xindi/version"
+            assert version_path in member_names
+            f = tf.extractfile(version_path)
+            assert f is not None
+            version_content = f.read().decode()
+            assert "q1libre" in version_content
+
+            # Check q1libre_version.txt marker exists
+            marker_path = "./root/q1libre_version.txt"
+            assert marker_path in member_names
