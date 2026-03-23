@@ -1,0 +1,198 @@
+#! /bin/bash
+
+python3 /root/scripts/merge.py
+
+# 检查文件
+if [ ! -f /etc/bash.bashrc ]; then
+    echo "Misiing bash.bashrc file, recovering..."
+    cp -fp /root/etc/bash.bashrc /etc/bash.bashrc
+fi
+
+# 初始化变量
+method_value=0
+
+# 从config.mksini文件中读取method值
+while IFS='=' read -r key value; do
+    # 去除前后空格
+    key=$(echo $key | xargs)
+    value=$(echo $value | xargs)
+
+    if [ "$key" = "method" ]; then
+        method_value=$value
+        break
+    fi
+done < <(sed -n '/\[app_connection\]/,/\[/p' /home/mks/klipper_config/config.mksini)
+
+# frpc如果不存在则安装
+if ! systemctl list-unit-files | grep -qw '^frpc.service'; then
+    chmod +x /root/frp/setup_frpc.sh /root/frp/frpc
+    bash /root/frp/setup_frpc.sh
+fi
+
+# 由于armbian官方的更新 buster似乎不再被支持，因此先注释掉armbian源
+sudo sed -i '1s/^/#/' /etc/apt/sources.list.d/armbian.list
+
+#删除旧的时间更新脚本
+rm -f /etc/profile.d/time_refresh.sh
+
+#添加日志轮换
+mv -f /root/auto_update/auto_update_logrotate /etc/logrotate.d/auto_update_logrotate
+
+# 修改sudo权限
+SUDO_FILE="/etc/sudoers.d/mks"
+
+# 重启nginx
+sudo systemctl reload nginx
+
+
+# 使用 echo 和 sudo tee 命令来写入文件内容
+echo 'mks ALL=(ALL) ALL, !/usr/sbin/visudo, !/bin/nano /etc/sudoers, !/bin/nano /root/*, !/bin/ls /root, !/bin/cat /etc/sudoers, !/bin/systemctl, !/bin/chmod, NOPASSWD: /usr/bin/psd-overlay-helper, /usr/bin/timedatectl, /usr/bin/apt' | sudo tee $SUDO_FILE > /dev/null
+# 设置正确的文件权限
+chmod 0440 $SUDO_FILE
+
+if [ ! -f "/home/mks/klipper_config/Adaptive_Mesh.cfg" ]; then
+    if [ -f "/root/Adaptive_Mesh.cfg" ]; then
+        cp /root/Adaptive_Mesh.cfg /home/mks/klipper_config/ -f
+        chmod 644 /home/mks/klipper_config/Adaptive_Mesh.cfg
+    fi
+fi
+
+#更改ssh登录界面的样式
+cp -f /root/10-armbian-header /etc/update-motd.d/10-armbian-header
+
+##仅在互联网情况下更新
+#if [ "$method_value" = "1" ]; then
+################更新qrcode用到的python包
+#    INSTALLED_PACKAGES=$(pip3 list)
+#    UPDATE_PIP=0
+#    check_package() {
+#        PACKAGE=$1
+#        echo "Checking $PACKAGE..."
+#        if echo "$INSTALLED_PACKAGES" | grep -F $PACKAGE > /dev/null; then
+#            echo "$PACKAGE is already installed."
+#        else
+#            echo "$PACKAGE is not installed."
+#            UPDATE_PIP=1  # 标记需要更新pip
+#        fi
+#    }
+#
+#    # 检查每个包
+#    check_package toml
+#    check_package qrcode
+#    check_package cryptography
+#
+#    # 如果任何包没有安装，则更新pip3
+#    if [ $UPDATE_PIP -eq 1 ]; then
+#        echo "Updating pip3..."
+#        pip3 install --upgrade pip
+#    fi
+#
+#    install_package() {
+#        PACKAGE=$1
+#        echo "Installing $PACKAGE..."
+#        pip3 install $PACKAGE
+#    }
+#
+#    # 检查并安装每个包，这次不检查pip是否需要更新
+#    for PACKAGE in toml qrcode cryptography; do
+#        if echo "$INSTALLED_PACKAGES" | grep -F $PACKAGE > /dev/null; then
+#            echo "$PACKAGE is already installed."
+#        else
+#            install_package $PACKAGE
+#        fi
+#    done
+#
+#    echo "All necessary packages are installed."
+################更新qrcode结束
+#fi
+
+################本地更新python库
+# 指定本地包的存储目录
+local_package_dir="/home/mks/python_package"
+
+# 获取已安装的Python包列表
+installed_packages=$(pip3 list)
+
+# 定义一个函数来安装Python包，如果它们尚未安装
+install_python_package_if_not_exists() {
+    package_name=$1
+    package_file=$2
+
+    # 检查包是否已安装
+    if ! echo "$installed_packages" | grep -Fq $package_name; then
+        # 如果未安装，则安装包
+        echo "Installing $package_name..."
+        pip3 install --no-index --find-links "$local_package_dir" "$local_package_dir/$package_file"
+    else
+        echo "$package_name is already installed."
+    fi
+}
+
+# 检查是否需要更新 pip, setuptools, 和 wheel
+need_update=0
+for package in "qrcode" "cryptography" "toml"; do
+    if ! echo "$installed_packages" | grep -Fq $package; then
+        need_update=1
+        break
+    fi
+done
+
+# 如果任何一个未安装，先更新 pip, setuptools, 和 wheel
+if [ $need_update -eq 1 ]; then
+    python3 -m pip install --no-index --find-links "pip" "/home/mks/python_package/pip-23.3.2-py3-none-any.whl"
+    python3 -m pip install --no-index --find-links "setuptools" "/home/mks/python_package/setuptools-68.0.0-py3-none-any.whl"
+    python3 -m pip install --no-index --find-links "wheel" "/home/mks/python_package/wheel-0.42.0-py3-none-any.whl"
+fi
+
+# 安装依赖包
+install_python_package_if_not_exists "qrcode" "qrcode-7.4.2-py3-none-any.whl"
+install_python_package_if_not_exists "cryptography" "cryptography-41.0.7-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl"
+install_python_package_if_not_exists "toml" "toml-0.10.2-py2.py3-none-any.whl"
+
+# 删除本地包目录
+rm -rf /home/mks/python_package
+################本地更新python库结束
+
+# 移动文件
+# 修改主频 提升开机速度
+cp -fp /root/etc/rk3328-roc-cc.dtb /boot/dtb/rockchip/rk3328-roc-cc.dtb
+cp -fp /root/etc/rk3328-roc-cc.dts /boot/dtb/rockchip/rk3328-roc-cc.dts
+cp -fp /root/etc/60-persistent-v4l.rules /lib/udev/rules.d/60-persistent-v4l.rules
+
+#修改文件权限 (Q1Libre: fixed permissions - replaced broad chmod with targeted values)
+find /home/mks/klipper_config -type d -exec chmod 755 {} \;
+find /home/mks/klipper_config -type f -exec chmod 644 {} \;
+chmod 700 /root/xindi/build/xindi
+chown -R mks:mks /home/mks/klipper/
+chown -R mks:mks /home/mks/klipper_config/
+chmod 700 /usr/bin/makerbase-automount
+# Q1Libre: set correct sudoers permissions
+chmod 0440 /etc/sudoers.d/q1libre 2>/dev/null || true
+
+# Q1Libre: install version marker
+if [ -f /root/q1libre_version.txt ]; then
+    echo "Q1Libre firmware installed" >> /var/log/q1libre_install.log
+    echo "  Version: $(cat /root/q1libre_version.txt)" >> /var/log/q1libre_install.log
+    echo "  Date: $(date)" >> /var/log/q1libre_install.log
+fi
+
+#重启各类服务令
+if [ "$method_value" = "0" ]; then
+    echo "LAN only, only reloading and restarting klipper and moonraker"
+    systemctl daemon-reload
+    systemctl restart klipper.service
+    systemctl restart moonraker.service
+    sleep 12
+    curl -X POST http://127.0.0.1:7125/printer/firmware_restart
+else
+    echo "Internet mode, performing full service operations"
+    systemctl daemon-reload
+    systemctl restart klipper.service
+    systemctl restart moonraker.service
+    systemctl enable frpc.service
+    systemctl start frpc.service
+    sleep 12
+    curl -X POST http://127.0.0.1:7125/printer/firmware_restart
+fi
+
+sync
