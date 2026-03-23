@@ -58,20 +58,22 @@ def extract_deb(deb_path: str, output_dir: str) -> None:
         (out / "debian-binary").write_bytes(db.data)
 
     # Extract control archive
-    control_member = members.get("control.tar.xz") or members.get("control.tar.gz")
+    count_ctrl = 0
+    control_member = members.get("control.tar.xz")
     if control_member is not None:
         control_dir = out / "control"
         count_ctrl = extract_tar_xz(control_member.data, control_dir)
         print(f"  control: {count_ctrl} files -> {control_dir}")
 
     # Extract data archive
-    data_member = members.get("data.tar.xz") or members.get("data.tar.gz")
+    count_data = 0
+    data_member = members.get("data.tar.xz")
     if data_member is not None:
         data_dir = out / "data"
         count_data = extract_tar_xz(data_member.data, data_dir)
         print(f"  data:    {count_data} files -> {data_dir}")
 
-    total = (count_ctrl if control_member else 0) + (count_data if data_member else 0)
+    total = count_ctrl + count_data
     print(f"  total:   {total} files extracted to {out}")
 
 
