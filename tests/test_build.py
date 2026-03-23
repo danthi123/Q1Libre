@@ -261,10 +261,12 @@ def test_control_overlay_empty_dir_does_not_pollute_data():
 
 def test_patched_postinst_content():
     """The real overlay/control/postinst must not contain chmod 777, resolv.conf override, or IPv6 disable."""
-    postinst = Path("overlay/control/postinst")
+    postinst = Path(__file__).resolve().parent.parent / "overlay" / "control" / "postinst"
     assert postinst.exists(), "overlay/control/postinst must exist"
     content = postinst.read_text(encoding="utf-8")
     assert "chmod 777" not in content, "chmod 777 must be removed"
     assert "resolv.conf" not in content, "hardcoded DNS override must be removed"
     assert "sysctl.conf" not in content, "IPv6 disable must be removed"
     assert "chmod 755" in content or "chmod 644" in content, "proper permissions must be set"
+    assert "chmod 0440 /etc/sudoers.d/q1libre" in content, "sudoers perm guard must be present"
+    assert "q1libre_version.txt" in content, "Q1Libre version marker logging must be present"
