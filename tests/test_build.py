@@ -130,7 +130,6 @@ def test_build_produces_valid_deb():
 
 def test_control_overlay_applied():
     """Files in overlay/control/ must override base/control/ files in built deb."""
-    import lzma, tarfile, io
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         base = tmp / "base"
@@ -174,7 +173,6 @@ def test_control_overlay_applied():
 
 def test_control_overlay_not_in_data():
     """Files in overlay/control/ must NOT appear in the data.tar.xz of the built deb."""
-    import lzma, tarfile, io
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         base = tmp / "base"
@@ -208,3 +206,54 @@ def test_control_overlay_not_in_data():
 
         assert not any("control/postinst" in n for n in names), \
             f"control/postinst must not appear in data.tar.xz, but found in: {names}"
+
+
+def test_control_overlay_empty_dir_does_not_pollute_data():
+    """An empty overlay/control/ dir must not affect data.tar.xz or cause errors."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        base = tmp / "base"
+        overlay = tmp / "overlay"
+        output = tmp / "dist" / "QD_Q1_SOC"
+
+        ctrl = base / "control"
+        ctrl.mkdir(parents=True)
+        (ctrl / "control").write_text("Package: qd-q1-soc\nVersion: 4.4.24\n")
+        (ctrl / "postinst").write_text("#!/bin/sh\n# STOCK\nexit 0\n")
+
+        data = base / "data"
+        version_dir = data / "root" / "xindi"
+        version_dir.mkdir(parents=True)
+        (version_dir / "version").write_text(
+            "[version]\nmcu = V0.10.0\nui = V4.4.24\nsoc = V4.4.24\n"
+        )
+        (base / "debian-binary").write_text("2.0\n")
+
+        # Empty overlay/control/ directory — no files
+        (overlay / "control").mkdir(parents=True)
+
+        # One data overlay file
+        data_overlay = overlay / "home" / "mks"
+        data_overlay.mkdir(parents=True)
+        (data_overlay / "test.txt").write_text("hello\n")
+
+        output.parent.mkdir(parents=True)
+        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0")
+
+        from tools.deb import parse_deb
+        parts = parse_deb(output.read_bytes())
+
+        # data.tar.xz must contain the data overlay file
+        with lzma.open(io.BytesIO(parts["data.tar.xz"].data)) as lz:
+            with tarfile.open(fileobj=io.BytesIO(lz.read())) as tf:
+                names = tf.getnames()
+
+        assert any("test.txt" in n for n in names), "data overlay file missing"
+        assert not any("control" in n for n in names), \
+            f"control directory must not appear in data.tar.xz, got: {names}"
+
+        # postinst must still be the STOCK one (nothing in overlay/control/)
+        with lzma.open(io.BytesIO(parts["control.tar.xz"].data)) as lz:
+            with tarfile.open(fileobj=io.BytesIO(lz.read())) as tf:
+                postinst = tf.extractfile("./postinst").read().decode()
+        assert "STOCK" in postinst
