@@ -259,6 +259,15 @@ def test_control_overlay_empty_dir_does_not_pollute_data():
         assert "STOCK" in postinst
 
 
+def test_moonraker_has_mainsail_update_manager():
+    """overlay moonraker.conf must include an [update_manager mainsail] section."""
+    moonraker = Path(__file__).resolve().parent.parent / "overlay" / "home" / "mks" / "klipper_config" / "moonraker.conf"
+    assert moonraker.exists()
+    content = moonraker.read_text()
+    assert "[update_manager mainsail]" in content
+    assert "mainsail-crew/mainsail" in content
+
+
 def test_patched_postinst_content():
     """The real overlay/control/postinst must not contain chmod 777, resolv.conf override, or IPv6 disable."""
     postinst = Path(__file__).resolve().parent.parent / "overlay" / "control" / "postinst"
@@ -270,3 +279,27 @@ def test_patched_postinst_content():
     assert "chmod 755" in content or "chmod 644" in content, "proper permissions must be set"
     assert "chmod 0440 /etc/sudoers.d/q1libre" in content, "sudoers perm guard must be present"
     assert "q1libre_version.txt" in content, "Q1Libre version marker logging must be present"
+
+
+def test_mks_bashrc_has_aliases():
+    """overlay .bashrc must define klog, mlog, and krestart aliases."""
+    bashrc = Path(__file__).resolve().parent.parent / "overlay" / "home" / "mks" / ".bashrc"
+    assert bashrc.exists(), "overlay/home/mks/.bashrc must exist"
+    content = bashrc.read_text()
+    assert "alias klog=" in content
+    assert "alias mlog=" in content
+    assert "alias krestart=" in content
+    assert "klippy.log" in content
+    assert "moonraker.log" in content
+
+
+def test_sudoers_override_exists():
+    """overlay sudoers.d/q1libre must allow klipper/moonraker restarts without blanket sudo."""
+    sudoers = Path(__file__).resolve().parent.parent / "overlay" / "etc" / "sudoers.d" / "q1libre"
+    assert sudoers.exists(), "overlay/etc/sudoers.d/q1libre must exist"
+    content = sudoers.read_text()
+    assert "klipper.service" in content
+    assert "moonraker.service" in content
+    assert "NOPASSWD" in content
+    # Must NOT grant blanket sudo
+    assert "ALL=(ALL) ALL" not in content
