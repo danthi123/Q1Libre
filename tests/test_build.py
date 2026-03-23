@@ -126,3 +126,47 @@ def test_build_produces_valid_deb():
             # Check q1libre_version.txt marker exists
             marker_path = "./root/q1libre_version.txt"
             assert marker_path in member_names
+
+
+def test_control_overlay_applied():
+    """Files in overlay/control/ must override base/control/ files in built deb."""
+    import lzma, tarfile, io
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        base = tmp / "base"
+        overlay = tmp / "overlay"
+        output = tmp / "dist" / "QD_Q1_SOC"
+
+        # Minimal base
+        ctrl = base / "control"
+        ctrl.mkdir(parents=True)
+        (ctrl / "control").write_text("Package: qd-q1-soc\nVersion: 4.4.24\n")
+        (ctrl / "postinst").write_text("#!/bin/sh\n# STOCK postinst\nexit 0\n")
+
+        data = base / "data"
+        version_dir = data / "root" / "xindi"
+        version_dir.mkdir(parents=True)
+        (version_dir / "version").write_text(
+            "[version]\nmcu = V0.10.0\nui = V4.4.24\nsoc = V4.4.24\n"
+        )
+        (base / "debian-binary").write_text("2.0\n")
+
+        # Control overlay — patched postinst
+        ctrl_overlay = overlay / "control"
+        ctrl_overlay.mkdir(parents=True)
+        (ctrl_overlay / "postinst").write_text("#!/bin/sh\n# Q1LIBRE patched postinst\nexit 0\n")
+
+        output.parent.mkdir(parents=True)
+        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0")
+
+        assert output.exists()
+
+        # Extract and inspect the built deb's postinst
+        from tools.deb import parse_deb
+        parts = parse_deb(output.read_bytes())
+        with lzma.open(io.BytesIO(parts["control.tar.xz"].data)) as lz:
+            with tarfile.open(fileobj=io.BytesIO(lz.read())) as tf:
+                postinst_member = tf.getmember("./postinst")
+                content = tf.extractfile(postinst_member).read().decode()
+        assert "Q1LIBRE patched postinst" in content
+        assert "STOCK postinst" not in content

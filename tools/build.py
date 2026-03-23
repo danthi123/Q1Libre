@@ -83,6 +83,16 @@ def build_firmware(
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src_file, dest)
 
+        # 2b. Apply control overlays (overlay/control/ → work/control/)
+        control_overlay = overlay_dir / "control"
+        if control_overlay.is_dir():
+            for src in control_overlay.rglob("*"):
+                if src.is_file():
+                    rel = src.relative_to(control_overlay)
+                    dst = work / "control" / rel
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+
         # 3. Apply patches — placeholder for Phase 1
         pass
 
