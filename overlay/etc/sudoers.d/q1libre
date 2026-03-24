@@ -1,9 +1,22 @@
 # Q1Libre sudoers additions
-# Allows mks user to restart klipper/moonraker without a password
-# This is required for the shell aliases (krestart, mrestart, kmrestart)
+# Allows mks user to manage services and system without a password
 
+# Klipper / Moonraker service management
 mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart klipper.service
 mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart moonraker.service
 mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart klipper.service moonraker.service
 mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl status klipper.service
 mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl status moonraker.service
+
+# Nginx and Avahi service management
+mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service
+mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl status nginx.service
+mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart avahi-daemon.service
+mks ALL=(ALL) NOPASSWD: /usr/bin/systemctl status avahi-daemon.service
+
+# Log viewing
+mks ALL=(ALL) NOPASSWD: /usr/bin/journalctl
+
+# Power management
+mks ALL=(ALL) NOPASSWD: /usr/sbin/shutdown
+mks ALL=(ALL) NOPASSWD: /usr/sbin/reboot

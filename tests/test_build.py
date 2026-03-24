@@ -294,12 +294,17 @@ def test_mks_bashrc_has_aliases():
 
 
 def test_sudoers_override_exists():
-    """overlay sudoers.d/q1libre must allow klipper/moonraker restarts without blanket sudo."""
+    """overlay sudoers.d/q1libre must allow service management and power commands without blanket sudo."""
     sudoers = Path(__file__).resolve().parent.parent / "overlay" / "etc" / "sudoers.d" / "q1libre"
     assert sudoers.exists(), "overlay/etc/sudoers.d/q1libre must exist"
     content = sudoers.read_text()
     assert "klipper.service" in content
     assert "moonraker.service" in content
+    assert "nginx.service" in content
+    assert "avahi-daemon.service" in content
+    assert "journalctl" in content
+    assert "/usr/sbin/shutdown" in content
+    assert "/usr/sbin/reboot" in content
     assert "NOPASSWD" in content
     # Must NOT grant blanket sudo
     assert "ALL=(ALL) ALL" not in content
