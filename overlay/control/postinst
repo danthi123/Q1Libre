@@ -178,6 +178,9 @@ fi
 
 # Q1Libre Phase 2A: Install Python 3.8 and upgrade Moonraker
 echo "Q1Libre: installing Python 3.8..."
+# Stop moonraker before replacing its files
+systemctl stop moonraker.service 2>/dev/null || true
+echo "Q1Libre: moonraker stopped for upgrade"
 
 # Install bundled Python 3.8 packages (arm64, Debian Buster-compatible)
 if [ -d /root/python38_debs ] && ls /root/python38_debs/*.deb >/dev/null 2>&1; then
@@ -215,13 +218,16 @@ else
         || echo "Q1Libre: WARNING - moonraker venv rebuild failed"
 
     # Install moonraker requirements into new venv
-    if [ -f /home/mks/moonraker/scripts/moonraker-requirements.txt ]; then
+    if [ -f /home/mks/moonraker/scripts/moonraker-requirements.txt ] && \
+       [ -x /home/mks/moonraker-env/bin/pip ]; then
         echo "Q1Libre: installing moonraker pip dependencies..."
         sudo -u mks /home/mks/moonraker-env/bin/pip install \
             -r /home/mks/moonraker/scripts/moonraker-requirements.txt \
             --quiet || echo "Q1Libre: WARNING - some pip packages failed, moonraker may not start"
     fi
 
+    # Clean up bundled python3.8 debs to recover ~6MB of disk space
+    rm -rf /root/python38_debs 2>/dev/null || true
     echo "Q1Libre: Moonraker upgrade complete"
 fi
 
