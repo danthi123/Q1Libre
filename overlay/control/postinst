@@ -199,7 +199,8 @@ else
     # Back up existing moonraker for rollback
     if [ -d /home/mks/moonraker ]; then
         rm -rf /home/mks/moonraker.bak
-        cp -a /home/mks/moonraker /home/mks/moonraker.bak
+        cp -a /home/mks/moonraker /home/mks/moonraker.bak \
+            || echo "Q1Libre: WARNING - moonraker backup failed, rollback not available"
         echo "Q1Libre: moonraker backed up to /home/mks/moonraker.bak"
     fi
 
@@ -208,14 +209,17 @@ else
 
     # Rebuild moonraker venv with python3.8 (replaces old python3.7 venv)
     echo "Q1Libre: rebuilding moonraker venv with python3.8..."
-    sudo -u mks python3.8 -m venv /home/mks/moonraker-env --clear
+    # Ensure moonraker-env is owned by mks so venv --clear can succeed
+    chown -R mks:mks /home/mks/moonraker-env 2>/dev/null || true
+    sudo -u mks python3.8 -m venv /home/mks/moonraker-env --clear \
+        || echo "Q1Libre: WARNING - moonraker venv rebuild failed"
 
     # Install moonraker requirements into new venv
     if [ -f /home/mks/moonraker/scripts/moonraker-requirements.txt ]; then
         echo "Q1Libre: installing moonraker pip dependencies..."
         sudo -u mks /home/mks/moonraker-env/bin/pip install \
             -r /home/mks/moonraker/scripts/moonraker-requirements.txt \
-            --quiet 2>/dev/null || echo "Q1Libre: WARNING - some pip packages failed, moonraker may not start"
+            --quiet || echo "Q1Libre: WARNING - some pip packages failed, moonraker may not start"
     fi
 
     echo "Q1Libre: Moonraker upgrade complete"
