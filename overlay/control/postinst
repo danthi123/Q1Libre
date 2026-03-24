@@ -221,6 +221,13 @@ fi
 ln -sf /home/mks/moonraker/moonraker/thirdparty /home/mks/moonraker/thirdparty
 chown -h mks:mks /home/mks/moonraker/thirdparty
 
+# Link timelapse plugin into moonraker components
+if [ -f /home/mks/moonraker-timelapse/component/timelapse.py ]; then
+    ln -sf /home/mks/moonraker-timelapse/component/timelapse.py /home/mks/moonraker/moonraker/components/timelapse.py
+    chown -h mks:mks /home/mks/moonraker/moonraker/components/timelapse.py
+    echo "/moonraker/components/timelapse.py" >> /home/mks/moonraker/.git/info/exclude 2>/dev/null || true
+fi
+
 echo "Q1Libre: Moonraker upgrade complete"
 
 # Q1Libre: Create printer_data symlinks for new Moonraker directory layout
