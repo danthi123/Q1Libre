@@ -113,11 +113,57 @@ Both methods support **offline** and **online** installations -- the printer doe
 
 Download the official V4.4.24 firmware from the [QIDI Q1 Pro releases page](https://github.com/QIDITECH/QIDI_Q1_Pro/releases), place it in `QD_Update/` on a USB stick, and flash the same way.
 
+### Restore from full system backup
+
+If you created a full eMMC backup image before flashing (see [Backup](#full-system-backup-advanced--recommended) above), you can restore it using the [official eMMC flash procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc) with your backup image instead of the factory image:
+
+1. Follow the eMMC flash guide to connect to the printer's eMMC storage from your computer.
+2. Use a tool like [balenaEtcher](https://etcher.balena.io/) or `dd` to write your `q1pro_backup.img` to the eMMC:
+   ```bash
+   dd if=q1pro_backup.img of=/dev/<emmc-device> bs=4M status=progress
+   ```
+3. This restores your printer to the exact state it was in when the backup was taken, including all configs, calibration data, and wifi settings.
+
 ### Worst-case recovery (bricked printer)
 
-If the printer is unresponsive and USB flashing does not work, follow the official eMMC flash procedure:
+If the printer is unresponsive and USB flashing does not work, follow the official eMMC flash procedure with the factory image:
 
 <https://wiki.qidi3d.com/en/Memo/flash-emmc>
+
+## Project Status
+
+### Completed
+
+- [x] Build pipeline & overlay system
+- [x] Klipper v0.10 → v0.13 (managed fork with Qidi patches)
+- [x] Moonraker July 2022 → v0.10.0-19
+- [x] Fluidd v1.19.0 → v1.36.2
+- [x] Moonraker update_manager enabled
+- [x] Full offline USB-only install (all wheels bundled including numpy/scipy)
+- [x] Touchscreen/xindi compatibility preserved
+- [x] Shell aliases (15)
+- [x] mDNS/Avahi
+- [x] Sudoers improvements
+- [x] Log rotation
+- [x] Timelapse enabled by default
+- [x] Documentation (README, install guide, on-printer reference)
+- [x] Full eMMC backup instructions
+- [x] GitHub release (v0.5.3)
+- [x] PLR Python 3 fix (buffering bug)
+
+### Pending (Deferred — Higher Risk)
+
+- [ ] **Gcode macros** — Improved START_PRINT/END_PRINT, pause/resume macros. Directly affects print behavior so needs careful testing.
+- [ ] **chmod 777 cleanup** — Stock firmware sets 777 on many files/dirs. We fixed new files (755/644) but didn't sweep existing stock files. Risk: xindi or other stock binaries may depend on world-writable permissions.
+- [ ] **Hardcoded DNS removal** — Stock firmware hardcodes Chinese DNS servers. Should be switched to DHCP-provided DNS. Risk: could break network on some setups.
+- [ ] **Other Python 2→3 landmines** — We found the `buffering=0` one during printing. There could be more lurking in rarely-executed code paths (error handlers, edge cases in PLR recovery, filament runout handling, etc.).
+
+### Nice-to-Haves (Future Releases)
+
+- [ ] **MCU firmware upgrade** (v0.10 → v0.13) — requires careful flashing procedure, biggest remaining upgrade
+- [ ] **Camera/webcam integration improvements**
+- [ ] **KAMP** (Klipper Adaptive Meshing & Purging) — already partially present in config
+- [ ] **Moonraker notifications** (Telegram/Pushover on print events)
 
 ## Known Limitations
 
