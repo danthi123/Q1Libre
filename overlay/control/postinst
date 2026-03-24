@@ -188,6 +188,21 @@ if [ -f /root/q1libre_version.txt ]; then
     echo "  Date: $(date)" >> /var/log/q1libre_install.log
 fi
 
+# Q1Libre: System debloat — remove ~3GB of unnecessary packages
+if [ -x /root/scripts/debloat.sh ]; then
+    echo "Q1Libre: running system debloat..."
+    bash /root/scripts/debloat.sh || echo "Q1Libre: WARNING - debloat had errors (non-fatal)"
+fi
+
+# Q1Libre: Apply Debian security updates (if online)
+if [ "$method_value" = "1" ]; then
+    echo "Q1Libre: checking for security updates..."
+    apt-get update -qq 2>/dev/null && \
+    apt-get upgrade -y -qq 2>/dev/null && \
+    echo "Q1Libre: security updates applied" || \
+    echo "Q1Libre: security update skipped (apt error)"
+fi
+
 # Q1Libre Phase 2B: Upgrade Klipper to managed fork (danthi123/klipper q1-pro)
 echo "Q1Libre: upgrading Klipper..."
 # Stop klipper before replacing files
