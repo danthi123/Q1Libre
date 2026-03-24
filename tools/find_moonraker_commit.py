@@ -1,54 +1,51 @@
 #!/usr/bin/env python3
 """
 Scan Moonraker git history to find the last commit compatible with Python 3.7.
-Python 3.8+ indicators: 'from __future__ import annotations', walrus ':='.
+Python 3.8+ indicators: walrus operator ':=' in non-comment code lines.
+Note: 'from __future__ import annotations' is 3.7+ compatible (PEP 563), NOT 3.8+.
 Run once to identify PINNED_SHA for vendor_moonraker.py.
 Usage: python tools/find_moonraker_commit.py
 Requires: git, internet access
-
-Result: 6c27885702aefb8760780f2dcbcedda873c4b81f
-  date:  2021-05-18 19:12:54 -0400
-  msg:   file_manager: send "root_update" notification for all registered directories
-  (next commit 96e6924 introduced 'from __future__ import annotations')
 """
 import subprocess
 import sys
-import ast
 import tempfile
 import os
-import re
 
 REPO = "https://github.com/Arksine/moonraker.git"
+SINCE = "2022-01-01"
+UNTIL = "2023-12-01"
 
-# Walrus operator: identifier followed by :=  (not !=, <=, >=)
-_WALRUS_RE = re.compile(r'[A-Za-z_]\w*\s*:=')
 
+def has_py38_syntax(path: str) -> bool:
+    """Return True if any .py file in path uses Python 3.8+ syntax.
 
-def has_py38_syntax(tmp: str, sha: str) -> bool:
-    """Checkout sha and return True if any .py file in moonraker/ uses Python 3.8+ syntax."""
-    subprocess.run(["git", "checkout", "--quiet", sha], cwd=tmp,
-                   check=True, capture_output=True)
-    mpath = os.path.join(tmp, "moonraker")
-    if not os.path.isdir(mpath):
-        return False  # moonraker/ subdir not present yet
-    for root, _, files in os.walk(mpath):
+    Reliable 3.8+ indicators:
+    - Walrus operator ':=' in non-comment code lines
+    - Note: 'from __future__ import annotations' is 3.7+ compatible (PEP 563), NOT 3.8+
+    """
+    for root, _, files in os.walk(path):
         for f in files:
             if not f.endswith(".py"):
                 continue
             fp = os.path.join(root, f)
             try:
-                src = open(fp, encoding="utf-8", errors="replace").read()
+                lines = open(fp).readlines()
             except Exception:
                 continue
-            if "from __future__ import annotations" in src:
-                return True
-            if _WALRUS_RE.search(src):
-                return True
-            try:
-                ast.parse(src)
-            except SyntaxError:
-                return True
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    continue
+                # Walrus operator — true 3.8+ syntax
+                if ":=" in stripped:
+                    return True
     return False
+
+
+def checkout_sha(tmp: str, sha: str) -> None:
+    subprocess.run(["git", "checkout", "--quiet", sha], cwd=tmp,
+                   check=True, capture_output=True)
 
 
 def main() -> None:
@@ -56,28 +53,39 @@ def main() -> None:
         print(f"Cloning moonraker into {tmp}...")
         subprocess.run(["git", "clone", "--quiet", REPO, tmp], check=True)
 
-        # Get all commits up to today, newest first
+        # Get commits in the scan window, newest first
         result = subprocess.run(
-            ["git", "log", "--oneline"],
+            ["git", "log", "--oneline",
+             f"--after={SINCE}", f"--before={UNTIL}"],
             cwd=tmp, capture_output=True, text=True, check=True
         )
         commits = [line.split()[0] for line in result.stdout.strip().splitlines()]
-        print(f"Binary searching {len(commits)} commits...")
+        if not commits:
+            print("ERROR: no commits found in the specified date range.", file=sys.stderr)
+            sys.exit(1)
+        print(f"Binary searching {len(commits)} commits ({SINCE} to {UNTIL})...")
 
-        newest_bad = has_py38_syntax(tmp, commits[0])
-        oldest_bad = has_py38_syntax(tmp, commits[-1])
+        def check(sha: str) -> bool:
+            checkout_sha(tmp, sha)
+            mpath = os.path.join(tmp, "moonraker")
+            if not os.path.isdir(mpath):
+                return False
+            return has_py38_syntax(mpath)
+
+        newest_bad = check(commits[0])
+        oldest_bad = check(commits[-1])
 
         if not newest_bad:
             sha = commits[0]
         elif oldest_bad:
-            print("ERROR: even the oldest commit has Python 3.8+ syntax.", file=sys.stderr)
+            print("ERROR: even the oldest commit in range has Python 3.8+ syntax.", file=sys.stderr)
             sys.exit(1)
         else:
             # Binary search: commits[lo] has py38, commits[hi] does not
             lo, hi = 0, len(commits) - 1
             while hi - lo > 1:
                 mid = (lo + hi) // 2
-                if has_py38_syntax(tmp, commits[mid]):
+                if check(commits[mid]):
                     lo = mid
                 else:
                     hi = mid
