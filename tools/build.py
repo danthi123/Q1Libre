@@ -21,6 +21,8 @@ from pathlib import Path
 from tools.deb import build_deb
 from tools.version import read_version, write_version
 
+DEFAULT_VERSION = "0.2.0-phase2a"
+
 
 def _build_tar_xz(source_dir: Path) -> bytes:
     """Build a .tar.xz archive from a directory tree.
@@ -160,7 +162,7 @@ def main() -> None:
         help="Output .deb path (default: dist/QD_Q1_SOC)",
     )
     parser.add_argument(
-        "--version", default="0.1.0", help="Q1Libre version (default: 0.1.0)"
+        "--version", default=DEFAULT_VERSION, help=f"Q1Libre version (default: {DEFAULT_VERSION})"
     )
     args = parser.parse_args()
 
