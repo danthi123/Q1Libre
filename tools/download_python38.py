@@ -25,7 +25,7 @@ OUTPUT_DIR = Path(__file__).parent.parent / "overlay" / "root" / "python38_debs"
 # Python 3.8.7-1 arm64 packages from Debian snapshot archive.
 # These were in Debian testing during the bullseye development cycle.
 # snapshot.debian.org preserves them permanently.
-SNAPSHOT_BASE = "http://snapshot.debian.org/archive/debian/20201222T203709Z/pool/main/p/python3.8/"
+SNAPSHOT_BASE = "https://snapshot.debian.org/archive/debian/20201222T203709Z/pool/main/p/python3.8/"
 
 # Packages needed for python3.8 + venv support (arm64)
 # python3.8-distutils is included inside libpython3.8-stdlib (not a separate package)
@@ -39,22 +39,24 @@ PACKAGES = [
 ]
 
 def download_file(url: str, dest: Path) -> bool:
-    """Download a file, return True on success."""
+    """Download a file atomically, return True on success."""
     if dest.exists():
-        size_kb = dest.stat().st_size // 1024
-        print(f"  Already exists: {dest.name} ({size_kb} KB)")
+        print(f"  Already exists: {dest.name}")
         return True
+    tmp = dest.with_suffix(".tmp")
     print(f"  Downloading {dest.name}...")
     try:
-        urllib.request.urlretrieve(url, dest)
+        urllib.request.urlretrieve(url, tmp)
+        tmp.rename(dest)
         size_kb = dest.stat().st_size // 1024
         print(f"  OK ({size_kb} KB)")
         return True
     except Exception as e:
         print(f"  FAILED: {e}")
-        if dest.exists():
-            dest.unlink()
         return False
+    finally:
+        if tmp.exists():
+            tmp.unlink()
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
