@@ -10,7 +10,9 @@ Usage:
 """
 import argparse
 import json
+import re
 import shutil
+import ssl
 import sys
 import tarfile
 import urllib.request
@@ -24,6 +26,15 @@ PROJECT_ROOT = Path(__file__).parent.parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "overlay" / "home" / "mks" / "moonraker"
 GITHUB_API = "https://api.github.com/repos/Arksine/moonraker/commits/master"
 GITHUB_TARBALL = "https://github.com/Arksine/moonraker/archive/{sha}.tar.gz"
+
+
+def _safe_extractall(tf: tarfile.TarFile, dest: Path) -> None:
+    for member in tf.getmembers():
+        # Reject absolute paths and path traversal
+        member_path = Path(member.name)
+        if member_path.is_absolute() or ".." in member_path.parts:
+            raise ValueError(f"Unsafe path in tarball: {member.name!r}")
+    tf.extractall(dest)
 
 
 def get_latest_sha() -> str:
@@ -52,21 +63,27 @@ def vendor(sha: str, output: Path) -> None:
         tmp_path = Path(tmp)
         tarball = tmp_path / "moonraker.tar.gz"
 
-        # Atomic download
+        # Atomic download using urlopen with explicit SSL context
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "q1libre-vendor-tool"}
+        )
+        with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+            data = resp.read()
         tmp_dl = tarball.with_suffix(".tmp")
         try:
-            urllib.request.urlretrieve(url, tmp_dl)
+            tmp_dl.write_bytes(data)
             tmp_dl.rename(tarball)
-        except Exception as e:
+        finally:
             if tmp_dl.exists():
                 tmp_dl.unlink()
-            raise RuntimeError(f"Download failed: {e}") from e
 
         print(f"Downloaded {tarball.stat().st_size // 1024} KB")
 
         # Extract
         with tarfile.open(tarball) as tf:
-            tf.extractall(tmp_path)
+            _safe_extractall(tf, tmp_path)
 
         # GitHub tarballs extract to moonraker-<sha>/
         extracted = next(tmp_path.glob("moonraker-*"))
@@ -94,16 +111,19 @@ def vendor(sha: str, output: Path) -> None:
 
 
 def update_pinned_sha(new_sha: str) -> None:
-    """Update the PINNED_SHA constant in this file."""
+    """Update the PINNED_SHA constant in this file, preserving line endings."""
     this_file = Path(__file__)
-    src = this_file.read_text()
-    # Replace the PINNED_SHA line
-    lines = src.splitlines()
-    for i, line in enumerate(lines):
-        if line.startswith("PINNED_SHA = "):
-            lines[i] = f'PINNED_SHA = "{new_sha}"'
-            break
-    this_file.write_text("\n".join(lines) + "\n")
+    src = this_file.read_bytes().decode("utf-8")
+    updated = re.sub(
+        r'^(PINNED_SHA\s*=\s*)["\'].*?["\']',
+        rf'\g<1>"{new_sha}"',
+        src,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if updated == src:
+        raise ValueError("PINNED_SHA pattern not found in source file")
+    this_file.write_bytes(updated.encode("utf-8"))
     print(f"Updated PINNED_SHA in {this_file.name}")
 
 
