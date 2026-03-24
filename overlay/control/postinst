@@ -174,16 +174,6 @@ chmod 700 /root/xindi/build/xindi
 chown -R mks:mks /home/mks/klipper/
 chown -R mks:mks /home/mks/klipper_config/
 
-# Q1Libre: Commit klipper overlay changes so update_manager sees a clean repo
-if [ -d /home/mks/klipper/.git ]; then
-    cd /home/mks/klipper
-    git config user.email "q1libre@local"
-    git config user.name "Q1Libre"
-    git add -A
-    git commit -m "Q1Libre: Qidi klipper with patches" --allow-empty 2>/dev/null || true
-    chown -R mks:mks /home/mks/klipper/.git
-    cd /
-fi
 chmod 700 /usr/bin/makerbase-automount
 # Q1Libre: set correct sudoers permissions
 chmod 0440 /etc/sudoers.d/q1libre 2>/dev/null || true
@@ -194,6 +184,60 @@ if [ -f /root/q1libre_version.txt ]; then
     echo "  Version: $(cat /root/q1libre_version.txt)" >> /var/log/q1libre_install.log
     echo "  Date: $(date)" >> /var/log/q1libre_install.log
 fi
+
+# Q1Libre Phase 2B: Upgrade Klipper to upstream v0.13 with Qidi extras as plugins
+echo "Q1Libre: upgrading Klipper..."
+# Stop klipper before replacing files
+systemctl stop klipper.service 2>/dev/null || true
+echo "Q1Libre: klipper stopped for upgrade"
+
+# Back up existing klipper for rollback
+if [ -d /home/mks/klipper ]; then
+    rm -rf /home/mks/klipper.bak
+    cp -a /home/mks/klipper /home/mks/klipper.bak \
+        || echo "Q1Libre: WARNING - klipper backup failed, rollback not available"
+    echo "Q1Libre: klipper backed up to /home/mks/klipper.bak"
+fi
+
+# New klipper tree is placed by dpkg from overlay — set ownership
+chown -R mks:mks /home/mks/klipper
+
+# Reset git repo to the vendored upstream commit so update_manager sees a clean repo
+KLIPPER_SHA="594ec7e1205450ff0753d19f0724bbe8b380465d"
+if [ -d /home/mks/klipper/.git ]; then
+    cd /home/mks/klipper
+    git config user.email "q1libre@local"
+    git config user.name "Q1Libre"
+    git fetch origin 2>/dev/null || true
+    git reset --hard $KLIPPER_SHA 2>/dev/null \
+        || echo "Q1Libre: WARNING - klipper git reset failed"
+    chown -R mks:mks /home/mks/klipper/.git
+    cd /
+fi
+
+# Symlink qidi_extras modules into klippy/extras
+for mod in qdprobe chamber_fan gcode_macro_break qidi_stepper; do
+    ln -sf /home/mks/qidi_extras/${mod}.py /home/mks/klipper/klippy/extras/${mod}.py
+    chown -h mks:mks /home/mks/klipper/klippy/extras/${mod}.py
+done
+
+# Exclude symlinks from git status
+if [ -d /home/mks/klipper/.git ]; then
+    for mod in qdprobe chamber_fan gcode_macro_break qidi_stepper; do
+        echo "klippy/extras/${mod}.py" >> /home/mks/klipper/.git/info/exclude
+    done
+fi
+
+# Link timelapse macros config if available
+if [ -f /home/mks/moonraker-timelapse/klipper_macro/timelapse.cfg ]; then
+    ln -sf /home/mks/moonraker-timelapse/klipper_macro/timelapse.cfg /home/mks/klipper_config/timelapse.cfg
+    chown -h mks:mks /home/mks/klipper_config/timelapse.cfg
+fi
+
+# Run config migration for upstream Klipper v0.13 compatibility
+python3 /root/scripts/migrate_config.py /home/mks/klipper_config/printer.cfg 2>/dev/null || true
+
+echo "Q1Libre: Klipper upgrade complete"
 
 # Q1Libre Phase 2A: Upgrade Moonraker
 echo "Q1Libre: upgrading Moonraker..."
