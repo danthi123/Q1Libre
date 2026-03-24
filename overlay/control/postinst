@@ -1,5 +1,8 @@
 #! /bin/bash
 
+# Q1Libre: fix sudoers permissions immediately (dpkg extracts with Windows perms)
+chmod 0440 /etc/sudoers.d/q1libre 2>/dev/null || true
+
 python3 /root/scripts/merge.py
 
 # Q1Libre: Re-enable update_manager after merge.py may have reset it

@@ -47,11 +47,19 @@ def _build_tar_xz(source_dir: Path) -> bytes:
             # NOTE: We use an explicit allowlist of text extensions. Files with
             # no extension (suffix == "") are NOT included because that matches
             # compiled binaries like xindi and udp_server.
-            if item.is_file() and item.suffix in (
+            _TEXT_EXTENSIONS = {
                 ".py", ".sh", ".cfg", ".conf", ".txt", ".md", ".service",
                 ".html", ".css", ".js", ".json", ".yaml", ".yml", ".ini",
                 ".xml", ".csv", ".log",
-            ):
+            }
+            # Control scripts (postinst, prerm, etc.) have no extension
+            # but are text files that need CRLF stripping.
+            _CONTROL_SCRIPTS = {"postinst", "preinst", "postrm", "prerm", "conffiles", "control"}
+            is_text = (
+                item.suffix in _TEXT_EXTENSIONS
+                or item.name in _CONTROL_SCRIPTS
+            )
+            if item.is_file() and is_text:
                 data = item.read_bytes()
                 if b"\r\n" in data:
                     data = data.replace(b"\r\n", b"\n")
