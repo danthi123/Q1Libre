@@ -17,6 +17,7 @@ GitHub: <https://github.com/danthi123/Q1Libre>
 - **Security hardened** -- `chmod 777` replaced with proper `755`/`644` permissions; improved sudoers configuration
 - **mDNS / Avahi support** -- printer discoverable on your network as `mkspi.local`
 - **Shell aliases** -- convenient shortcuts for common SSH management tasks
+- **Timelapse** -- enabled by default with moonraker-timelapse integration
 - **Log rotation** -- prevents log files from filling the eMMC
 - **Full touchscreen (xindi) functionality preserved**
 - **MCU firmware unchanged** -- remains at v0.10; no MCU reflash needed (fully backward compatible with host v0.13)
@@ -120,7 +121,6 @@ If the printer is unresponsive and USB flashing does not work, follow the offici
 
 ## Known Limitations
 
-- **Timelapse plugin** is not currently functional (on the roadmap).
 - **MCU firmware remains at v0.10** while the host runs v0.13. These versions are backward compatible, but the version mismatch is worth noting.
 
 ## Contributing
