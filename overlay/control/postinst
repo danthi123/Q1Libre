@@ -207,10 +207,24 @@ echo "Q1Libre: rebuilding klippy-env with Python 3..."
 if [ -d /home/mks/klippy-env ]; then
     cp -a /home/mks/klippy-env /home/mks/klippy-env.bak
 fi
-virtualenv -p python3 /home/mks/klippy-env 2>/dev/null || python3 -m virtualenv /home/mks/klippy-env 2>/dev/null
+/usr/bin/virtualenv -p python3 --clear /home/mks/klippy-env 2>/dev/null
 if [ -x /home/mks/klippy-env/bin/pip ]; then
-    /home/mks/klippy-env/bin/pip install -r /home/mks/klipper/scripts/klippy-requirements.txt --quiet 2>/dev/null \
-        || echo "Q1Libre: WARNING - klippy pip install had errors"
+    # Install from bundled wheels first (offline), fall back to PyPI if needed
+    if [ -d /root/klippy-wheels ] && ls /root/klippy-wheels/*.whl >/dev/null 2>&1; then
+        echo "Q1Libre: installing klippy packages from bundled wheels..."
+        /home/mks/klippy-env/bin/pip install /root/klippy-wheels/*.whl 2>&1 || true
+        # Install python-can from source tarball if present
+        if [ -f /root/klippy-wheels/python-can-*.tar.gz ]; then
+            /home/mks/klippy-env/bin/pip install /root/klippy-wheels/python-can-*.tar.gz 2>&1 || true
+        fi
+        rm -rf /root/klippy-wheels 2>/dev/null || true
+        echo "Q1Libre: klippy packages installed"
+    else
+        echo "Q1Libre: installing klippy packages from PyPI..."
+        /home/mks/klippy-env/bin/pip install -r /home/mks/klipper/scripts/klippy-requirements.txt \
+            --quiet 2>/dev/null \
+            || echo "Q1Libre: WARNING - klippy pip install had errors"
+    fi
     chown -R mks:mks /home/mks/klippy-env
     echo "Q1Libre: klippy-env rebuilt with Python 3"
 else
@@ -236,12 +250,13 @@ fi
 
 # Pre-compile c_helper.so (takes ~30s on ARM, avoids timeout on first startup)
 echo "Q1Libre: compiling klipper C helper..."
+rm -f /home/mks/klipper/klippy/chelper/c_helper.so
 cd /home/mks/klipper/klippy/chelper
-rm -f c_helper.so
-sudo -u mks /home/mks/klippy-env/bin/python -c "
+/home/mks/klippy-env/bin/python -c "
 import sys; sys.path.insert(0, '..')
 import chelper; chelper.get_ffi()
-" 2>/dev/null && echo "Q1Libre: c_helper compiled" || echo "Q1Libre: WARNING - c_helper compilation failed, will compile on first startup"
+" 2>&1 && echo "Q1Libre: c_helper compiled" || echo "Q1Libre: WARNING - c_helper compilation failed, will compile on first startup"
+chown mks:mks /home/mks/klipper/klippy/chelper/c_helper.so 2>/dev/null || true
 cd /
 
 # Link timelapse macros config if available
