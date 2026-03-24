@@ -29,11 +29,13 @@ GITHUB_TARBALL = "https://github.com/Arksine/moonraker/archive/{sha}.tar.gz"
 
 
 def _safe_extractall(tf: tarfile.TarFile, dest: Path) -> None:
+    """Extract tarball, rejecting path traversal, symlinks, and hardlinks."""
     for member in tf.getmembers():
-        # Reject absolute paths and path traversal
         member_path = Path(member.name)
         if member_path.is_absolute() or ".." in member_path.parts:
             raise ValueError(f"Unsafe path in tarball: {member.name!r}")
+        if member.issym() or member.islnk():
+            raise ValueError(f"Symlink/hardlink in tarball: {member.name!r}")
     tf.extractall(dest)
 
 
