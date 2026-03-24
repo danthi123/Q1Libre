@@ -31,26 +31,30 @@ GitHub: <https://github.com/danthi123/Q1Libre>
 
 ## Backup (Before You Flash)
 
-Backing up your configuration is strongly recommended before flashing any firmware.
+Backing up before flashing any firmware is strongly recommended.
 
-SSH into your printer and copy the following directories to your computer:
+### Full System Backup (Advanced -- Recommended)
+
+Create a complete image of the printer's eMMC. This is the only way to fully restore your printer to its exact current state, including all configs, calibration, wifi setup, and installed software.
+
+From your computer:
 
 ```bash
-ssh root@<printer-ip>   # password: makerbase
-
-# Back up printer configs (bed mesh, input shaper data, macros, etc.)
-# Copy ~/klipper_config/ to your computer
-
-# Back up any saved gcode files
-# Copy ~/gcode_files/ to your computer
+ssh root@<printer-ip> "dd if=/dev/mmcblk1 bs=4M status=progress" > q1pro_backup.img
 ```
 
-You can use `scp` from your computer to pull these directories:
+This creates a full disk image (~14.5 GB for the 16 GB eMMC) and takes approximately 20 minutes over SSH. Store it somewhere safe. If you ever need to do a full restore, follow the [official eMMC flash procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc) using this image instead of the factory image.
+
+### Configuration Backup (Quick)
+
+At minimum, back up your printer configuration and gcode files:
 
 ```bash
 scp -r root@<printer-ip>:~/klipper_config ./klipper_config_backup
 scp -r root@<printer-ip>:~/gcode_files ./gcode_files_backup
 ```
+
+Default SSH credentials: `root@<printer-ip>`, password `makerbase`.
 
 **Note:** Calibration data (bed mesh, input shaper) is preserved during Q1Libre updates. You do not need to re-run calibration after flashing.
 

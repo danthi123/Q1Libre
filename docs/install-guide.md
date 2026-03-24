@@ -24,7 +24,7 @@ Repository: <https://github.com/danthi123/Q1Libre>
 
 ## 2. Pre-Install Backup (Strongly Recommended)
 
-Before flashing Q1Libre, back up your printer configuration and any files you want to keep. SSH into your printer:
+Before flashing Q1Libre, back up your printer. SSH into your printer:
 
 ```
 ssh root@<printer-ip>
@@ -34,7 +34,23 @@ Default credentials:
 - **User:** `root`
 - **Password:** `makerbase`
 
-### What to back up
+### Full System Backup (Advanced -- Recommended)
+
+Create a complete image of the printer's eMMC storage. This is the only way to fully restore your printer to its exact current state — including all configs, calibration data, wifi setup, and installed software.
+
+From your local machine:
+
+```bash
+ssh root@<printer-ip> "dd if=/dev/mmcblk1 bs=4M status=progress" > q1pro_backup.img
+```
+
+This creates a full disk image (~14.5 GB for the 16 GB eMMC) and takes approximately 20 minutes over SSH. Store it somewhere safe.
+
+If you ever need to do a full restore from this image, follow the [official eMMC flash procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc) using your backup image instead of the factory image.
+
+### Configuration Backup (Quick)
+
+At minimum, back up your printer configuration and gcode files:
 
 | Path | Contents | Priority |
 |------|----------|----------|
@@ -42,8 +58,6 @@ Default credentials:
 | `~/gcode_files/` | Your sliced gcode files | High |
 | `~/moonraker/` | Moonraker installation and database | Optional |
 | `~/klipper/` | Klipper installation | Optional |
-
-### Example backup commands
 
 From your local machine, use `scp` to pull files off the printer:
 

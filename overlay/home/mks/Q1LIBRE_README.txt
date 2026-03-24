@@ -61,6 +61,19 @@
 
 
 ------------------------------------------------------------------------
+  BACKUP
+------------------------------------------------------------------------
+
+  Full system image (from your computer, ~20 min):
+    ssh root@<printer-ip> "dd if=/dev/mmcblk1 bs=4M status=progress" \
+      > q1pro_backup.img
+
+  Quick config backup (from your computer):
+    scp -r root@<printer-ip>:~/klipper_config ./backup/
+    scp -r root@<printer-ip>:~/gcode_files ./backup/
+
+
+------------------------------------------------------------------------
   ROLLBACK TO STOCK FIRMWARE
 ------------------------------------------------------------------------
 
@@ -71,7 +84,8 @@
 
   3. Plug USB into printer -- stock firmware will be restored.
 
-  4. Emergency recovery:
+  4. Emergency recovery (full eMMC reflash):
      https://wiki.qidi3d.com/en/Memo/flash-emmc
+     Use your q1pro_backup.img or the factory image.
 
 ========================================================================
