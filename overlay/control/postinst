@@ -176,6 +176,51 @@ if [ -f /root/q1libre_version.txt ]; then
     echo "  Date: $(date)" >> /var/log/q1libre_install.log
 fi
 
+# Q1Libre Phase 2A: Install Python 3.8 and upgrade Moonraker
+echo "Q1Libre: installing Python 3.8..."
+
+# Install bundled Python 3.8 packages (arm64, Debian Buster-compatible)
+if [ -d /root/python38_debs ] && ls /root/python38_debs/*.deb >/dev/null 2>&1; then
+    dpkg -i --force-overwrite /root/python38_debs/libpython3.8-minimal_*.deb \
+                               /root/python38_debs/python3.8-minimal_*.deb \
+                               /root/python38_debs/libpython3.8-stdlib_*.deb \
+                               /root/python38_debs/libpython3.8_*.deb \
+                               /root/python38_debs/python3.8_*.deb \
+                               /root/python38_debs/python3.8-venv_*.deb \
+        2>&1 || echo "Q1Libre: WARNING - python3.8 install had errors, continuing..."
+fi
+
+# Verify python3.8 is now available
+if ! command -v python3.8 >/dev/null 2>&1; then
+    echo "Q1Libre: ERROR - python3.8 not available after install, skipping Moonraker upgrade"
+else
+    echo "Q1Libre: upgrading Moonraker..."
+
+    # Back up existing moonraker for rollback
+    if [ -d /home/mks/moonraker ]; then
+        rm -rf /home/mks/moonraker.bak
+        cp -a /home/mks/moonraker /home/mks/moonraker.bak
+        echo "Q1Libre: moonraker backed up to /home/mks/moonraker.bak"
+    fi
+
+    # New moonraker tree is placed by dpkg from overlay — set ownership
+    chown -R mks:mks /home/mks/moonraker
+
+    # Rebuild moonraker venv with python3.8 (replaces old python3.7 venv)
+    echo "Q1Libre: rebuilding moonraker venv with python3.8..."
+    sudo -u mks python3.8 -m venv /home/mks/moonraker-env --clear
+
+    # Install moonraker requirements into new venv
+    if [ -f /home/mks/moonraker/scripts/moonraker-requirements.txt ]; then
+        echo "Q1Libre: installing moonraker pip dependencies..."
+        sudo -u mks /home/mks/moonraker-env/bin/pip install \
+            -r /home/mks/moonraker/scripts/moonraker-requirements.txt \
+            --quiet 2>/dev/null || echo "Q1Libre: WARNING - some pip packages failed, moonraker may not start"
+    fi
+
+    echo "Q1Libre: Moonraker upgrade complete"
+fi
+
 #重启各类服务令
 if [ "$method_value" = "0" ]; then
     echo "LAN only, only reloading and restarting klipper and moonraker"
