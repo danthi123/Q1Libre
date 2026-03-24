@@ -29,6 +29,34 @@ alias q1status='/root/scripts/q1libre_info.sh'
 # Show printer config directory
 alias cdcfg='cd ~/klipper_config && ls'
 
+# ── Network & System ────────────────────────────────────────────────────────
+# Show printer IP address
+alias myip='hostname -I | awk "{print \$1}"'
+
+# Show disk usage summary
+alias diskfree='df -h / /home | tail -n +2'
+
+# ── Versions ────────────────────────────────────────────────────────────────
+# Show Klipper version
+alias kversion='cd ~/klipper && git describe --tags --always 2>/dev/null; cd ~'
+
+# Show Moonraker version
+alias mversion='cd ~/moonraker && git describe --tags --always 2>/dev/null; cd ~'
+
+# ── Additional Logs ─────────────────────────────────────────────────────────
+# Tail xindi errors
+alias xerr='sudo journalctl -u xindi -n 50 --no-pager'
+
+# Last 30 dmesg lines
+alias dtail='dmesg | tail -30'
+
+# ── Navigation ──────────────────────────────────────────────────────────────
+# Go to klipper logs directory
+alias cdlog='cd ~/klipper_logs && ls'
+
+# Go to gcode files directory
+alias cdgcode='cd ~/gcode_files && ls'
+
 # ── Prompt ───────────────────────────────────────────────────────────────────
 PS1='\[\e[1;32m\]\u@\h\[\e[0m\]:\[\e[1;34m\]\w\[\e[0m\]\$ '
 

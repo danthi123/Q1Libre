@@ -282,15 +282,25 @@ def test_patched_postinst_content():
 
 
 def test_mks_bashrc_has_aliases():
-    """overlay .bashrc must define klog, mlog, and krestart aliases."""
+    """overlay .bashrc must define all Q1Libre aliases."""
     bashrc = Path(__file__).resolve().parent.parent / "overlay" / "home" / "mks" / ".bashrc"
     assert bashrc.exists(), "overlay/home/mks/.bashrc must exist"
     content = bashrc.read_text()
+    # Original aliases
     assert "alias klog=" in content
     assert "alias mlog=" in content
     assert "alias krestart=" in content
     assert "klippy.log" in content
     assert "moonraker.log" in content
+    # New aliases
+    assert "alias myip=" in content
+    assert "alias diskfree=" in content
+    assert "alias kversion=" in content
+    assert "alias mversion=" in content
+    assert "alias xerr=" in content
+    assert "alias dtail=" in content
+    assert "alias cdlog=" in content
+    assert "alias cdgcode=" in content
 
 
 def test_sudoers_override_exists():
