@@ -21,7 +21,7 @@ from pathlib import Path
 from tools.deb import build_deb
 from tools.version import read_version, write_version
 
-DEFAULT_VERSION = "0.4.0"
+DEFAULT_VERSION = "0.5.0"
 
 
 def _build_tar_xz(source_dir: Path) -> bytes:
@@ -44,8 +44,13 @@ def _build_tar_xz(source_dir: Path) -> bytes:
             arcname = "./" + rel.as_posix()
             # For text files (scripts, configs), strip Windows CRLF line endings
             # so they work correctly on Linux. Binary files are left as-is.
+            # NOTE: We use an explicit allowlist of text extensions. Files with
+            # no extension (suffix == "") are NOT included because that matches
+            # compiled binaries like xindi and udp_server.
             if item.is_file() and item.suffix in (
-                "", ".py", ".sh", ".cfg", ".conf", ".txt", ".md", ".service",
+                ".py", ".sh", ".cfg", ".conf", ".txt", ".md", ".service",
+                ".html", ".css", ".js", ".json", ".yaml", ".yml", ".ini",
+                ".xml", ".csv", ".log",
             ):
                 data = item.read_bytes()
                 if b"\r\n" in data:

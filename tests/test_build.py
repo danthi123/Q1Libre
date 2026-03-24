@@ -330,4 +330,4 @@ def test_phase2b_version_string():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert hasattr(mod, "DEFAULT_VERSION"), "build.py must have DEFAULT_VERSION constant"
-    assert "0.4.0" in mod.DEFAULT_VERSION, f"Expected 0.4.0 in version, got: {mod.DEFAULT_VERSION!r}"
+    assert "0.5.0" in mod.DEFAULT_VERSION, f"Expected 0.5.0 in version, got: {mod.DEFAULT_VERSION!r}"
