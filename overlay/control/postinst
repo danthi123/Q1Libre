@@ -173,6 +173,17 @@ find /home/mks/klipper_config -type f -exec chmod 644 {} \;
 chmod 700 /root/xindi/build/xindi
 chown -R mks:mks /home/mks/klipper/
 chown -R mks:mks /home/mks/klipper_config/
+
+# Q1Libre: Commit klipper overlay changes so update_manager sees a clean repo
+if [ -d /home/mks/klipper/.git ]; then
+    cd /home/mks/klipper
+    git config user.email "q1libre@local"
+    git config user.name "Q1Libre"
+    git add -A
+    git commit -m "Q1Libre: Qidi klipper with patches" --allow-empty 2>/dev/null || true
+    chown -R mks:mks /home/mks/klipper/.git
+    cd /
+fi
 chmod 700 /usr/bin/makerbase-automount
 # Q1Libre: set correct sudoers permissions
 chmod 0440 /etc/sudoers.d/q1libre 2>/dev/null || true
