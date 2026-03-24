@@ -201,8 +201,25 @@ fi
 # New moonraker tree is placed by dpkg from overlay — set ownership
 chown -R mks:mks /home/mks/moonraker
 
-# Create thirdparty symlink for module resolution
+# Reset git repo to the vendored upstream commit so update_manager sees a clean repo
+# This allows the update manager to track and update Moonraker from the UI
+VENDORED_SHA="4ba6fd228f264564f6613197fd9abb18ec068cf4"
+if [ -d /home/mks/moonraker/.git ]; then
+    cd /home/mks/moonraker
+    git config user.email "q1libre@local"
+    git config user.name "Q1Libre"
+    git fetch origin 2>/dev/null || true
+    git reset --hard $VENDORED_SHA 2>/dev/null \
+        || echo "Q1Libre: WARNING - git reset failed, update manager may show dirty"
+    # Exclude thirdparty symlink from git status
+    echo "/thirdparty" >> .git/info/exclude
+    chown -R mks:mks /home/mks/moonraker/.git
+    cd /
+fi
+
+# Create thirdparty symlink for module resolution (after git reset which removes it)
 ln -sf /home/mks/moonraker/moonraker/thirdparty /home/mks/moonraker/thirdparty
+chown -h mks:mks /home/mks/moonraker/thirdparty
 
 echo "Q1Libre: Moonraker upgrade complete"
 
