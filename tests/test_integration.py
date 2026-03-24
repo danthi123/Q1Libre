@@ -23,6 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STOCK_FIRMWARE = PROJECT_ROOT / "stock" / "QD_Q1_SOC"
 OVERLAY_DIR = PROJECT_ROOT / "overlay"
 PATCHES_DIR = PROJECT_ROOT / "patches"
+BASE_DIR = PROJECT_ROOT / "base"
 
 skip_no_stock = pytest.mark.skipif(
     not STOCK_FIRMWARE.exists(),
@@ -167,3 +168,47 @@ def test_phase1_patches_in_built_deb():
         assert "resolv.conf" not in postinst, "hardcoded DNS must not be in postinst"
         assert "sysctl.conf" not in postinst, "IPv6 disable must not be in postinst"
         assert "q1libre_version.txt" in postinst, "Q1Libre marker must be in postinst"
+
+
+@skip_no_stock
+def test_moonraker_in_built_deb(tmp_path: Path) -> None:
+    """Built deb must contain the upgraded moonraker tree."""
+    output_deb = tmp_path / "q1libre-test.deb"
+    build_firmware(
+        base_dir=BASE_DIR,
+        overlay_dir=OVERLAY_DIR,
+        patches_dir=PATCHES_DIR,
+        output_path=output_deb,
+        q1libre_version="0.2.0-phase2a",
+    )
+    assert output_deb.exists(), "build must produce output file"
+
+    parts = parse_deb(output_deb.read_bytes())
+    with lzma.open(io.BytesIO(parts["data.tar.xz"].data)) as lz:
+        with tarfile.open(fileobj=io.BytesIO(lz.read())) as tf:
+            names = tf.getnames()
+
+    moonraker_files = [n for n in names if "moonraker/moonraker.py" in n]
+    assert moonraker_files, f"moonraker.py not found in deb. Files: {names[:20]}"
+
+
+@skip_no_stock
+def test_python38_debs_in_built_deb(tmp_path: Path) -> None:
+    """Built deb must contain the python3.8 .deb packages."""
+    output_deb = tmp_path / "q1libre-test.deb"
+    build_firmware(
+        base_dir=BASE_DIR,
+        overlay_dir=OVERLAY_DIR,
+        patches_dir=PATCHES_DIR,
+        output_path=output_deb,
+        q1libre_version="0.2.0-phase2a",
+    )
+    assert output_deb.exists(), "build must produce output file"
+
+    parts = parse_deb(output_deb.read_bytes())
+    with lzma.open(io.BytesIO(parts["data.tar.xz"].data)) as lz:
+        with tarfile.open(fileobj=io.BytesIO(lz.read())) as tf:
+            names = tf.getnames()
+
+    py38_files = [n for n in names if "python38_debs" in n and ".deb" in n]
+    assert py38_files, f"python3.8 .deb packages not found in built deb. Files: {names[:30]}"
