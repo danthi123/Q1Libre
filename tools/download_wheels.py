@@ -46,6 +46,10 @@ KLIPPY_PACKAGES_WHEEL = [
     "wrapt",
     # aenum — pure Python
     "aenum",
+    # numpy — native, needed for input shaper calibration
+    "numpy==1.21.6",
+    # scipy — native, needed for trigger_analog and advanced signal processing
+    "scipy==1.7.3",
 ]
 
 # Packages that only have sdist (no wheel) on PyPI for this platform

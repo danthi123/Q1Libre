@@ -225,7 +225,7 @@ if [ -x /home/mks/klippy-env/bin/pip ]; then
             /home/mks/klippy-env/bin/pip install --no-index /root/klippy-wheels/setuptools-*.whl 2>&1 || true
         fi
         # Step 2: Install all remaining wheels (greenlet, cffi, pycparser,
-        # Jinja2, markupsafe, pyserial, wrapt, aenum)
+        # Jinja2, markupsafe, pyserial, wrapt, aenum, numpy)
         echo "Q1Libre: installing klippy wheel packages..."
         /home/mks/klippy-env/bin/pip install --no-index --find-links /root/klippy-wheels \
             /root/klippy-wheels/greenlet-*.whl \
@@ -236,6 +236,8 @@ if [ -x /home/mks/klippy-env/bin/pip ]; then
             /root/klippy-wheels/pyserial-*.whl \
             /root/klippy-wheels/wrapt-*.whl \
             /root/klippy-wheels/aenum-*.whl \
+            /root/klippy-wheels/numpy-*.whl \
+            /root/klippy-wheels/scipy-*.whl \
             2>&1 || echo "Q1Libre: WARNING - some wheel installs had errors"
         # Step 3: Install python-can from source tarball (needs setuptools)
         if ls /root/klippy-wheels/python-can-*.tar.gz >/dev/null 2>&1; then
