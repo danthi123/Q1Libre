@@ -262,19 +262,36 @@ else
 fi
 
 # Reset git repo to the vendored upstream commit so update_manager sees a clean repo
+KLIPPER_VERSION="v0.13.0-q1pro"
 KLIPPER_SHA="a28e64cb3cfe62ba3ffdae7a3e3f4741bbaebbfe"
-if [ -d /home/mks/klipper/.git ]; then
-    cd /home/mks/klipper
+cd /home/mks/klipper
+if [ -d .git ]; then
     git config user.email "q1libre@local"
     git config user.name "Q1Libre"
     git fetch origin 2>/dev/null || true
-    git reset --hard $KLIPPER_SHA 2>/dev/null \
-        || echo "Q1Libre: WARNING - klipper git reset failed"
-    git remote set-url origin https://github.com/danthi123/klipper.git
-    git branch --set-upstream-to=origin/q1-pro master 2>/dev/null || true
-    chown -R mks:mks /home/mks/klipper/.git
-    cd /
+    if git cat-file -e $KLIPPER_SHA 2>/dev/null; then
+        git reset --hard $KLIPPER_SHA 2>/dev/null
+        echo "Q1Libre: klipper git reset to $KLIPPER_SHA"
+    else
+        echo "Q1Libre: target SHA not available (offline install), recreating repo..."
+        rm -rf .git
+    fi
 fi
+# If no .git exists (fresh install or offline fallback), create a clean repo
+if [ ! -d .git ]; then
+    git init 2>/dev/null
+    git config user.email "q1libre@local"
+    git config user.name "Q1Libre"
+    git remote add origin https://github.com/danthi123/klipper.git 2>/dev/null || true
+    git add -A 2>/dev/null
+    git commit -m "Q1Libre: vendored klipper $KLIPPER_VERSION" --quiet 2>/dev/null
+    git tag "$KLIPPER_VERSION" 2>/dev/null
+    echo "Q1Libre: klipper repo initialized at $KLIPPER_VERSION"
+fi
+git remote set-url origin https://github.com/danthi123/klipper.git 2>/dev/null || true
+git branch --set-upstream-to=origin/q1-pro master 2>/dev/null || true
+chown -R mks:mks /home/mks/klipper/.git
+cd /
 
 # Pre-compile c_helper.so (takes ~30s on ARM, avoids timeout on first startup)
 echo "Q1Libre: compiling klipper C helper..."
@@ -316,19 +333,37 @@ chown -R mks:mks /home/mks/moonraker
 
 # Reset git repo to the vendored upstream commit so update_manager sees a clean repo
 # This allows the update manager to track and update Moonraker from the UI
+MOONRAKER_VERSION="v0.10.0-19"
 VENDORED_SHA="1ed102edfb34906115bfeb02712d4c839b93a7a9"
-if [ -d /home/mks/moonraker/.git ]; then
-    cd /home/mks/moonraker
+cd /home/mks/moonraker
+if [ -d .git ]; then
     git config user.email "q1libre@local"
     git config user.name "Q1Libre"
     git fetch origin 2>/dev/null || true
-    git reset --hard $VENDORED_SHA 2>/dev/null \
-        || echo "Q1Libre: WARNING - git reset failed, update manager may show dirty"
-    # Exclude thirdparty symlink from git status
-    echo "/thirdparty" >> .git/info/exclude
-    chown -R mks:mks /home/mks/moonraker/.git
-    cd /
+    if git cat-file -e $VENDORED_SHA 2>/dev/null; then
+        git reset --hard $VENDORED_SHA 2>/dev/null
+        echo "Q1Libre: moonraker git reset to $VENDORED_SHA"
+    else
+        echo "Q1Libre: target SHA not available (offline install), recreating repo..."
+        rm -rf .git
+    fi
 fi
+# If no .git exists (fresh install or offline fallback), create a clean repo
+if [ ! -d .git ]; then
+    git init 2>/dev/null
+    git config user.email "q1libre@local"
+    git config user.name "Q1Libre"
+    git remote add origin https://github.com/Arksine/moonraker.git 2>/dev/null || true
+    git add -A 2>/dev/null
+    git commit -m "Q1Libre: vendored moonraker $MOONRAKER_VERSION" --quiet 2>/dev/null
+    git tag "$MOONRAKER_VERSION" 2>/dev/null
+    echo "Q1Libre: moonraker repo initialized at $MOONRAKER_VERSION"
+fi
+# Exclude thirdparty symlink from git status
+mkdir -p .git/info
+echo "/thirdparty" >> .git/info/exclude
+chown -R mks:mks /home/mks/moonraker/.git
+cd /
 
 # Create thirdparty symlink for module resolution (after git reset which removes it)
 ln -sf /home/mks/moonraker/moonraker/thirdparty /home/mks/moonraker/thirdparty

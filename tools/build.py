@@ -21,7 +21,7 @@ from pathlib import Path
 from tools.deb import build_deb
 from tools.version import read_version, write_version
 
-DEFAULT_VERSION = "0.5.2"
+DEFAULT_VERSION = "0.5.3"
 
 
 def _build_tar_xz(source_dir: Path) -> bytes:
