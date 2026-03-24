@@ -220,7 +220,7 @@ else
 fi
 
 # Reset git repo to the vendored upstream commit so update_manager sees a clean repo
-KLIPPER_SHA="9ffde40ab951993aca71dc31f3c57b30993acebf"
+KLIPPER_SHA="fbc6ba97789a5544d663331456a34d4592aa3a0c"
 if [ -d /home/mks/klipper/.git ]; then
     cd /home/mks/klipper
     git config user.email "q1libre@local"
@@ -250,8 +250,7 @@ if [ -f /home/mks/moonraker-timelapse/klipper_macro/timelapse.cfg ]; then
     chown -h mks:mks /home/mks/klipper_config/timelapse.cfg
 fi
 
-# Run config migration for upstream Klipper v0.13 compatibility
-python3 /root/scripts/migrate_config.py /home/mks/klipper_config/printer.cfg 2>/dev/null || true
+# Config migration not needed - fork supports all Qidi config options natively
 
 echo "Q1Libre: Klipper upgrade complete"
 

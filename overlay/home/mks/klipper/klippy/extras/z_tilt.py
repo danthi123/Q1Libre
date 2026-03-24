@@ -41,7 +41,7 @@ class ZAdjustHelper:
             s.set_trapq(None)
         # Move each z stepper (sorted from lowest to highest) until they match
         positions = [(-a, s) for a, s in zip(adjustments, self.z_steppers)]
-        positions.sort(key=(lambda k: k[0]))
+        positions.sort()
         first_stepper_offset, first_stepper = positions[0]
         z_low = curpos[2] - first_stepper_offset
         for i in range(len(positions)-1):
@@ -79,7 +79,7 @@ class ZAdjustStatus:
         self.applied = False
     def get_status(self, eventtime):
         return {'applied': self.applied}
-    def _motor_off(self):
+    def _motor_off(self, print_time):
         self.reset()
 
 class RetryHelper:
@@ -108,7 +108,7 @@ class RetryHelper:
         return self.increasing > 1
     def check_retry(self, z_positions):
         if self.max_retries == 0:
-            return "done"
+            return
         error = round(max(z_positions) - min(z_positions),6)
         self.gcode.respond_info(
             "Retries: %d/%d %s: %0.6f tolerance: %0.6f" % (
@@ -143,14 +143,16 @@ class ZTilt:
         self.z_status.reset()
         self.retry_helper.start(gcmd)
         self.probe_helper.start_probe(gcmd)
-    def probe_finalize(self, positions):
+    def probe_finalize(self, offsets, positions):
         # Setup for coordinate descent analysis
+        z_offset = offsets[2]
         logging.info("Calculating bed tilt with: %s", positions)
-        params = { 'x_adjust': 0., 'y_adjust': 0., 'z_adjust': 0. }
+        params = { 'x_adjust': 0., 'y_adjust': 0., 'z_adjust': z_offset }
         # Perform coordinate descent
         def adjusted_height(pos, params):
-            return (pos.bed_z - pos.bed_x*params['x_adjust']
-                    - pos.bed_y*params['y_adjust'] - params['z_adjust'])
+            x, y, z = pos
+            return (z - x*params['x_adjust'] - y*params['y_adjust']
+                    - params['z_adjust'])
         def errorfunc(params):
             total_error = 0.
             for pos in positions:
@@ -163,7 +165,8 @@ class ZTilt:
         logging.info("Calculated bed tilt parameters: %s", new_params)
         x_adjust = new_params['x_adjust']
         y_adjust = new_params['y_adjust']
-        z_adjust = new_params['z_adjust']
+        z_adjust = (new_params['z_adjust'] - z_offset
+                    - x_adjust * offsets[0] - y_adjust * offsets[1])
         adjustments = [x*x_adjust + y*y_adjust + z_adjust
                        for x, y in self.z_positions]
         self.z_helper.adjust_steppers(adjustments, speed)

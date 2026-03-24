@@ -12,17 +12,13 @@ class error(Exception):
     pass
 
 class SerialReader:
-    def __init__(self, reactor, mcu_name=""):
+    BITS_PER_BYTE = 10.
+    def __init__(self, reactor, warn_prefix=""):
         self.reactor = reactor
-        self.warn_prefix = ""
-        self.mcu_name = mcu_name
-        if self.mcu_name:
-            self.warn_prefix = "mcu '%s': " % (self.mcu_name)
-        sq_name = ("serialq %s" % (self.mcu_name))[:15]
-        self.sq_name = sq_name.encode("utf-8")
+        self.warn_prefix = warn_prefix
         # Serial port
         self.serial_dev = None
-        self.msgparser = msgproto.MessageParser(warn_prefix=self.warn_prefix)
+        self.msgparser = msgproto.MessageParser(warn_prefix=warn_prefix)
         # C interface
         self.ffi_main, self.ffi_lib = chelper.get_ffi()
         self.serialqueue = None
@@ -39,8 +35,6 @@ class SerialReader:
         self.last_notify_id = 0
         self.pending_notifications = {}
     def _bg_thread(self):
-        name_short = ("serialhdl %s" % (self.mcu_name))[:15]
-        self.ffi_lib.set_thread_name(name_short.encode('utf-8'))
         response = self.ffi_main.new('struct pull_queue_message *')
         while 1:
             self.ffi_lib.serialqueue_pull(self.serialqueue, response)
@@ -87,8 +81,7 @@ class SerialReader:
         self.serial_dev = serial_dev
         self.serialqueue = self.ffi_main.gc(
             self.ffi_lib.serialqueue_alloc(serial_dev.fileno(),
-                                           serial_fd_type, client_id,
-                                           self.sq_name),
+                                           serial_fd_type, client_id),
             self.ffi_lib.serialqueue_free)
         self.background_thread = threading.Thread(target=self._bg_thread)
         self.background_thread.start()
@@ -104,13 +97,11 @@ class SerialReader:
         self.msgparser = msgparser
         self.register_response(self.handle_unknown, '#unknown')
         # Setup baud adjust
-        if serial_fd_type == b'c':
-            wire_freq = msgparser.get_constant_float('CANBUS_FREQUENCY', None)
-        else:
-            wire_freq = msgparser.get_constant_float('SERIAL_BAUD', None)
-        if wire_freq is not None:
-            self.ffi_lib.serialqueue_set_wire_frequency(self.serialqueue,
-                                                        wire_freq)
+        mcu_baud = msgparser.get_constant_float('SERIAL_BAUD', None)
+        if mcu_baud is not None:
+            baud_adjust = self.BITS_PER_BYTE / mcu_baud
+            self.ffi_lib.serialqueue_set_baud_adjust(
+                self.serialqueue, baud_adjust)
         receive_window = msgparser.get_constant_int('RECEIVE_WINDOW', None)
         if receive_window is not None:
             self.ffi_lib.serialqueue_set_receive_window(
@@ -144,9 +135,9 @@ class SerialReader:
                                         can_filters=filters,
                                         bustype='socketcan')
                 bus.send(set_id_msg)
-            except (can.CanError, os.error, IOError) as e:
-                logging.warning("%sUnable to open CAN port: %s",
-                                self.warn_prefix, e)
+            except can.CanError as e:
+                logging.warn("%sUnable to open CAN port: %s",
+                             self.warn_prefix, e)
                 self.reactor.pause(self.reactor.monotonic() + 5.)
                 continue
             bus.close = bus.shutdown # XXX
@@ -174,8 +165,7 @@ class SerialReader:
             try:
                 fd = os.open(filename, os.O_RDWR | os.O_NOCTTY)
             except OSError as e:
-                logging.warning("%sUnable to open port: %s",
-                                self.warn_prefix, e)
+                logging.warn("%sUnable to open port: %s", self.warn_prefix, e)
                 self.reactor.pause(self.reactor.monotonic() + 5.)
                 continue
             serial_dev = os.fdopen(fd, 'rb+', 0)
@@ -196,7 +186,7 @@ class SerialReader:
                 serial_dev.rts = rts
                 serial_dev.open()
             except (OSError, IOError, serial.SerialException) as e:
-                logging.warning("%sUnable to open serial port: %s",
+                logging.warn("%sUnable to open serial port: %s",
                              self.warn_prefix, e)
                 self.reactor.pause(self.reactor.monotonic() + 5.)
                 continue
@@ -208,8 +198,7 @@ class SerialReader:
         self.serial_dev = debugoutput
         self.msgparser.process_identify(dictionary, decompress=False)
         self.serialqueue = self.ffi_main.gc(
-            self.ffi_lib.serialqueue_alloc(self.serial_dev.fileno(), b'f', 0,
-                                           self.sq_name),
+            self.ffi_lib.serialqueue_alloc(self.serial_dev.fileno(), b'f', 0),
             self.ffi_lib.serialqueue_free)
     def set_clock_est(self, freq, conv_time, conv_clock, last_clock):
         self.ffi_lib.serialqueue_set_clock_est(
@@ -236,8 +225,6 @@ class SerialReader:
         return self.reactor
     def get_msgparser(self):
         return self.msgparser
-    def get_serialqueue(self):
-        return self.serialqueue
     def get_default_command_queue(self):
         return self.default_cmd_queue
     # Serial response callbacks
@@ -301,13 +288,13 @@ class SerialReader:
         logging.debug("%sUnknown message %d (len %d) while identifying",
                       self.warn_prefix, params['#msgid'], len(params['#msg']))
     def handle_unknown(self, params):
-        logging.warning("%sUnknown message type %d: %s",
+        logging.warn("%sUnknown message type %d: %s",
                      self.warn_prefix, params['#msgid'], repr(params['#msg']))
     def handle_output(self, params):
         logging.info("%s%s: %s", self.warn_prefix,
                      params['#name'], params['#msg'])
     def handle_default(self, params):
-        logging.warning("%sgot %s", self.warn_prefix, params)
+        logging.warn("%sgot %s", self.warn_prefix, params)
 
 # Class to send a query command and return the received response
 class SerialRetryCommand:
@@ -319,12 +306,9 @@ class SerialRetryCommand:
         self.serial.register_response(self.handle_callback, name, oid)
     def handle_callback(self, params):
         self.last_params = params
-    def get_response(self, cmds, cmd_queue, minclock=0, reqclock=0,
-                     retry=True):
+    def get_response(self, cmds, cmd_queue, minclock=0, reqclock=0):
         retries = 5
         retry_delay = .010
-        if not retry:
-            retries = 0
         while 1:
             for cmd in cmds[:-1]:
                 self.serial.raw_send(cmd, minclock, reqclock, cmd_queue)

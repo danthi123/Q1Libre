@@ -1,11 +1,10 @@
 # Support for micro-controller chip based temperature sensors
 #
-# Copyright (C) 2020-2024  Kevin O'Connor <kevin@koconnor.net>
+# Copyright (C) 2020  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import mcu
-from . import adc_temperature
 
 SAMPLE_TIME = 0.001
 SAMPLE_COUNT = 8
@@ -31,36 +30,31 @@ class PrinterTemperatureMCU:
         ppins = config.get_printer().lookup_object('pins')
         self.mcu_adc = ppins.setup_pin('adc',
                                        '%s:ADC_TEMPERATURE' % (mcu_name,))
-        self.mcu_adc.setup_adc_callback(self.adc_callback)
-        self.diag_helper = adc_temperature.HelperTemperatureDiagnostics(
-            config, self.mcu_adc, self.calc_temp)
+        self.mcu_adc.setup_adc_callback(REPORT_TIME, self.adc_callback)
+        query_adc = config.get_printer().load_object(config, 'query_adc')
+        query_adc.register_adc(config.get_name(), self.mcu_adc)
         # Register callbacks
         if self.printer.get_start_args().get('debugoutput') is not None:
-            self.mcu_adc.setup_adc_sample(REPORT_TIME,
-                                          SAMPLE_TIME, SAMPLE_COUNT)
+            self.mcu_adc.setup_minmax(SAMPLE_TIME, SAMPLE_COUNT,
+                                      range_check_count=RANGE_CHECK_COUNT)
             return
         self.printer.register_event_handler("klippy:mcu_identify",
-                                            self.handle_mcu_identify)
-    # Temperature interface
+                                            self._mcu_identify)
     def setup_callback(self, temperature_callback):
         self.temperature_callback = temperature_callback
     def get_report_time_delta(self):
         return REPORT_TIME
+    def adc_callback(self, read_time, read_value):
+        temp = self.base_temperature + read_value * self.slope
+        self.temperature_callback(read_time + SAMPLE_COUNT * SAMPLE_TIME, temp)
     def setup_minmax(self, min_temp, max_temp):
         self.min_temp = min_temp
         self.max_temp = max_temp
-    # Internal code
-    def adc_callback(self, samples):
-        read_time, read_value = samples[-1]
-        temp = self.base_temperature + read_value * self.slope
-        self.temperature_callback(read_time + SAMPLE_COUNT * SAMPLE_TIME, temp)
-    def calc_temp(self, adc):
-        return self.base_temperature + adc * self.slope
     def calc_adc(self, temp):
         return (temp - self.base_temperature) / self.slope
     def calc_base(self, temp, adc):
         return temp - adc * self.slope
-    def handle_mcu_identify(self):
+    def _mcu_identify(self):
         # Obtain mcu information
         mcu = self.mcu_adc.get_mcu()
         self.debug_read_cmd = mcu.lookup_query_command(
@@ -68,19 +62,16 @@ class PrinterTemperatureMCU:
         self.mcu_type = mcu.get_constants().get("MCU", "")
         # Run MCU specific configuration
         cfg_funcs = [
-            ('rp2', self.config_rp2040),
+            ('rp2040', self.config_rp2040),
             ('sam3', self.config_sam3), ('sam4', self.config_sam4),
-            ('same70', self.config_same70), ('samd21', self.config_samd21),
-            ('samd51', self.config_samd51), ('same5', self.config_samd51),
+            ('same70', self.config_same70),
+            ('samd21', self.config_samd21), ('samd51', self.config_samd51),
             ('stm32f1', self.config_stm32f1), ('stm32f2', self.config_stm32f2),
             ('stm32f4', self.config_stm32f4),
             ('stm32f042', self.config_stm32f0x2),
             ('stm32f070', self.config_stm32f070),
             ('stm32f072', self.config_stm32f0x2),
             ('stm32g0', self.config_stm32g0),
-            ('stm32g4', self.config_stm32g0),
-            ('stm32l4', self.config_stm32g0),
-            ('stm32h723', self.config_stm32h723),
             ('stm32h7', self.config_stm32h7),
             ('', self.config_unknown)]
         for name, func in cfg_funcs:
@@ -95,13 +86,10 @@ class PrinterTemperatureMCU:
                 self.slope = (self.temp2 - self.temp1) / (self.adc2 - self.adc1)
             self.base_temperature = self.calc_base(self.temp1, self.adc1)
         # Setup min/max checks
-        arange = [self.calc_adc(t) for t in [self.min_temp, self.max_temp]]
-        min_adc, max_adc = sorted(arange)
-        self.mcu_adc.setup_adc_sample(REPORT_TIME, SAMPLE_TIME, SAMPLE_COUNT,
-                                      minval=min_adc, maxval=max_adc,
-                                      range_check_count=RANGE_CHECK_COUNT)
-        self.diag_helper.setup_diag_minmax(self.min_temp, self.max_temp,
-                                           min_adc, max_adc)
+        adc_range = [self.calc_adc(t) for t in [self.min_temp, self.max_temp]]
+        self.mcu_adc.setup_minmax(SAMPLE_TIME, SAMPLE_COUNT,
+                                  minval=min(adc_range), maxval=max(adc_range),
+                                  range_check_count=RANGE_CHECK_COUNT)
     def config_unknown(self):
         raise self.printer.config_error("MCU temperature not supported on %s"
                                         % (self.mcu_type,))
@@ -154,11 +142,6 @@ class PrinterTemperatureMCU:
     def config_stm32g0(self):
         cal_adc_30 = self.read16(0x1FFF75A8) * 3.0 / (3.3 * 4095.)
         cal_adc_130 = self.read16(0x1FFF75CA) * 3.0 / (3.3 * 4095.)
-        self.slope = (130. - 30.) / (cal_adc_130 - cal_adc_30)
-        self.base_temperature = self.calc_base(30., cal_adc_30)
-    def config_stm32h723(self):
-        cal_adc_30 = self.read16(0x1FF1E820) / 4095.
-        cal_adc_130 = self.read16(0x1FF1E840) / 4095.
         self.slope = (130. - 30.) / (cal_adc_130 - cal_adc_30)
         self.base_temperature = self.calc_base(30., cal_adc_30)
     def config_stm32h7(self):

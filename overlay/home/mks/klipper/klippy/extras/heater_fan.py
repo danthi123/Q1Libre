@@ -18,6 +18,12 @@ class PrinterHeaterFan:
         self.fan = fan.Fan(config, default_shutdown_speed=1.)
         self.fan_speed = config.getfloat("fan_speed", 1., minval=0., maxval=1.)
         self.last_speed = 0.
+        self.fan_name = config.get_name().split()[-1]
+        gcode = self.printer.lookup_object("gcode")
+        gcode.register_mux_command("SET_HEART_TEMP","FAN",
+                                    self.fan_name,
+                                    self.cmd_SET_HEART_TEMP)
+
     def handle_ready(self):
         pheaters = self.printer.lookup_object('heaters')
         self.heaters = [pheaters.lookup_heater(n) for n in self.heater_names]
@@ -25,6 +31,10 @@ class PrinterHeaterFan:
         reactor.register_timer(self.callback, reactor.monotonic()+PIN_MIN_TIME)
     def get_status(self, eventtime):
         return self.fan.get_status(eventtime)
+    def cmd_SET_HEART_TEMP(self,gcmd):
+        temp = gcmd.get_float('S', 50.0)
+        self.heater_temp = temp
+
     def callback(self, eventtime):
         speed = 0.
         for heater in self.heaters:
@@ -33,7 +43,9 @@ class PrinterHeaterFan:
                 speed = self.fan_speed
         if speed != self.last_speed:
             self.last_speed = speed
-            self.fan.set_speed(speed)
+            curtime = self.printer.get_reactor().monotonic()
+            print_time = self.fan.get_mcu().estimated_print_time(curtime)
+            self.fan.set_speed(print_time + PIN_MIN_TIME, speed)
         return eventtime + 1.
 
 def load_config_prefix(config):

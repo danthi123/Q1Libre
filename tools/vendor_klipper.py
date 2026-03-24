@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Pinned Klipper commit SHA — danthi123/klipper q1-pro branch.
 # Re-run this tool with --update to refresh to a newer commit.
-PINNED_SHA = "9ffde40ab951993aca71dc31f3c57b30993acebf"
+PINNED_SHA = "fbc6ba97789a5544d663331456a34d4592aa3a0c"
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "overlay" / "home" / "mks" / "klipper"

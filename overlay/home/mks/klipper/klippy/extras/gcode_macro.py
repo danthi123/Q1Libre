@@ -3,7 +3,7 @@
 # Copyright (C) 2018-2021  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import traceback, logging, ast, copy, json
+import traceback, logging, ast, copy
 import jinja2
 
 
@@ -24,12 +24,9 @@ class GetStatusWrapper:
         po = self.printer.lookup_object(sval, None)
         if po is None or not hasattr(po, 'get_status'):
             raise KeyError(val)
-        reactor = self.printer.get_reactor()
         if self.eventtime is None:
-            self.eventtime = reactor.monotonic()
-        with reactor.assert_no_pause():
-            sts = po.get_status(self.eventtime)
-        self.cache[sval] = res = copy.deepcopy(sts)
+            self.eventtime = self.printer.get_reactor().monotonic()
+        self.cache[sval] = res = copy.deepcopy(po.get_status(self.eventtime))
         return res
     def __contains__(self, val):
         try:
@@ -52,12 +49,6 @@ class TemplateWrapper:
         self.create_template_context = gcode_macro.create_template_context
         try:
             self.template = env.from_string(script)
-        except jinja2.exceptions.TemplateSyntaxError as e:
-            lines = script.splitlines()
-            msg = "Error loading template '%s'\nline %s: %s # %s" % (
-                name, e.lineno, lines[e.lineno-1], e.message)
-            logging.exception(msg)
-            raise self.gcode.error(msg)
         except Exception as e:
             msg = "Error loading template '%s': %s" % (
                  name, traceback.format_exception_only(type(e), e)[-1])
@@ -153,13 +144,12 @@ class GCodeMacro:
         prefix = 'variable_'
         for option in config.get_prefix_options(prefix):
             try:
-                literal = ast.literal_eval(config.get(option))
-                json.dumps(literal, separators=(',', ':'))
-                self.variables[option[len(prefix):]] = literal
-            except (SyntaxError, TypeError, ValueError) as e:
+                self.variables[option[len(prefix):]] = ast.literal_eval(
+                    config.get(option))
+            except ValueError as e:
                 raise config.error(
-                    "Option '%s' in section '%s' is not a valid literal: %s" % (
-                        option, config.get_name(), e))
+                    "Option '%s' in section '%s' is not a valid literal" % (
+                        option, config.get_name()))
     def handle_connect(self):
         prev_cmd = self.gcode.register_command(self.alias, None)
         if prev_cmd is None:
@@ -179,10 +169,8 @@ class GCodeMacro:
             raise gcmd.error("Unknown gcode_macro variable '%s'" % (variable,))
         try:
             literal = ast.literal_eval(value)
-            json.dumps(literal, separators=(',', ':'))
-        except (SyntaxError, TypeError, ValueError) as e:
-            raise gcmd.error("Unable to parse '%s' as a literal: %s in '%s'" %
-                             (value, e, gcmd.get_commandline()))
+        except ValueError as e:
+            raise gcmd.error("Unable to parse '%s' as a literal" % (value,))
         v = dict(self.variables)
         v[variable] = literal
         self.variables = v

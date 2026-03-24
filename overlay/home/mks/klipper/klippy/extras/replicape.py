@@ -21,7 +21,6 @@ class pca9685_pwm:
             raise pins.error("Pin type not supported on replicape")
         self._mcu = replicape.host_mcu
         self._mcu.register_config_callback(self._build_config)
-        self._reactor = self._mcu.get_printer().get_reactor()
         self._bus = REPLICAPE_PCA9685_BUS
         self._address = REPLICAPE_PCA9685_ADDRESS
         self._cycle_time = REPLICAPE_PCA9685_CYCLE_TIME
@@ -29,7 +28,7 @@ class pca9685_pwm:
         self._oid = None
         self._invert = pin_params['invert']
         self._start_value = self._shutdown_value = float(self._invert)
-        self._is_enable = not not self._start_value
+        self._is_static = False
         self._last_clock = 0
         self._pwm_max = 0.
         self._set_cmd = None
@@ -43,18 +42,27 @@ class pca9685_pwm:
         if cycle_time != self._cycle_time:
             logging.info("Ignoring pca9685 cycle time of %.6f (using %.6f)",
                          cycle_time, self._cycle_time)
-    def setup_start_value(self, start_value, shutdown_value):
+    def setup_start_value(self, start_value, shutdown_value, is_static=False):
+        if is_static and start_value != shutdown_value:
+            raise pins.error("Static pin can not have shutdown value")
         if self._invert:
             start_value = 1. - start_value
             shutdown_value = 1. - shutdown_value
         self._start_value = max(0., min(1., start_value))
         self._shutdown_value = max(0., min(1., shutdown_value))
+        self._is_static = is_static
         self._replicape.note_pwm_start_value(
             self._channel, self._start_value, self._shutdown_value)
-        self._is_enable = not not self._start_value
     def _build_config(self):
         self._pwm_max = self._mcu.get_constant_float("PCA9685_MAX")
         cycle_ticks = self._mcu.seconds_to_clock(self._cycle_time)
+        if self._is_static:
+            self._mcu.add_config_cmd(
+                "set_pca9685_out bus=%d addr=%d channel=%d"
+                " cycle_ticks=%d value=%d" % (
+                    self._bus, self._address, self._channel,
+                    cycle_ticks, self._start_value * self._pwm_max))
+            return
         self._mcu.request_move_queue_slot()
         self._oid = self._mcu.create_oid()
         self._mcu.add_config_cmd(
@@ -67,19 +75,12 @@ class pca9685_pwm:
         cmd_queue = self._mcu.alloc_command_queue()
         self._set_cmd = self._mcu.lookup_command(
             "queue_pca9685_out oid=%c clock=%u value=%hu", cq=cmd_queue)
-    def next_aligned_print_time(self, print_time, allow_early=0.):
-        return print_time
-    def set_pwm(self, print_time, value):
+    def set_pwm(self, print_time, value, cycle_time=None):
         clock = self._mcu.print_time_to_clock(print_time)
         if self._invert:
             value = 1. - value
         value = int(max(0., min(1., value)) * self._pwm_max + 0.5)
-        is_enable = not not value
-        if is_enable != self._is_enable:
-            self._is_enable = is_enable
-            self._reactor.register_async_callback(
-                (lambda e, s=self, pt=print_time, ie=is_enable:
-                 s._replicape.note_pwm_enable(pt, s._channel, ie)))
+        self._replicape.note_pwm_enable(print_time, self._channel, value)
         self._set_cmd.send([self._oid, clock, value],
                            minclock=self._last_clock, reqclock=clock)
         self._last_clock = clock
@@ -147,7 +148,7 @@ class servo_pwm:
         pin_resolver.reserve_pin(resv1, config_name)
         pin_resolver.reserve_pin(resv2, config_name)
     def setup_cycle_time(self, cycle_time, hardware_pwm=False):
-        self.mcu_pwm.setup_cycle_time(cycle_time, True)
+        self.mcu_pwm.setup_cycle_time(cycle_time, True);
 
 ReplicapeStepConfig = {
     'disable': None,
@@ -162,7 +163,7 @@ class Replicape:
         printer = config.get_printer()
         ppins = printer.lookup_object('pins')
         ppins.register_chip('replicape', self)
-        revisions = ['B3']
+        revisions = {'B3': 'B3'}
         config.getchoice('revision', revisions)
         self.host_mcu = mcu.get_printer_mcu(printer, config.get('host_mcu'))
         # Setup enable pin
@@ -170,7 +171,6 @@ class Replicape:
         self.mcu_pwm_enable = ppins.setup_pin('digital_out', enable_pin)
         self.mcu_pwm_enable.setup_max_duration(0.)
         self.mcu_pwm_start_value = self.mcu_pwm_shutdown_value = False
-        self.last_pwm_enable_time = 0.
         # Setup power pins
         self.pins = {
             "power_e": (pca9685_pwm, 5), "power_h": (pca9685_pwm, 3),
@@ -180,6 +180,7 @@ class Replicape:
         self.servo_pins = {
             "servo0": 3, "servo1": 2 }
         # Setup stepper config
+        self.last_stepper_time = 0.
         self.stepper_dacs = {}
         shift_registers = [1, 0, 0, 1, 1]
         for port, name in enumerate('xyzeh'):
@@ -226,17 +227,18 @@ class Replicape:
         self.mcu_pwm_enable.setup_start_value(
             self.mcu_pwm_start_value, self.mcu_pwm_shutdown_value)
         self.enabled_channels[channel] = not not start_value
-    def note_pwm_enable(self, print_time, channel, is_enable):
+    def note_pwm_enable(self, print_time, channel, value):
+        is_enable = not not value
+        if self.enabled_channels[channel] == is_enable:
+            # Nothing to do
+            return
         self.enabled_channels[channel] = is_enable
         # Check if need to set the pca9685 enable pin
-        pe_time = max(print_time, self.last_pwm_enable_time + PIN_MIN_TIME)
         on_channels = [1 for c, e in self.enabled_channels.items() if e]
         if not on_channels:
-            self.mcu_pwm_enable.set_digital(pe_time, 0)
-            self.last_pwm_enable_time = pe_time
+            self.mcu_pwm_enable.set_digital(print_time, 0)
         elif is_enable and len(on_channels) == 1:
-            self.mcu_pwm_enable.set_digital(pe_time, 1)
-            self.last_pwm_enable_time = pe_time
+            self.mcu_pwm_enable.set_digital(print_time, 1)
         # Check if need to set the stepper enable lines
         if channel not in self.stepper_dacs:
             return
@@ -248,6 +250,7 @@ class Replicape:
             sr = self.sr_enabled
         else:
             return
+        print_time = max(print_time, self.last_stepper_time + PIN_MIN_TIME)
         clock = self.host_mcu.print_time_to_clock(print_time)
         self.sr_spi.spi_send(sr, minclock=clock, reqclock=clock)
     def setup_pin(self, pin_type, pin_params):

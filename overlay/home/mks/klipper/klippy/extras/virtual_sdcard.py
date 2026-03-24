@@ -4,8 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import os, sys, logging
-reload(sys)
-sys.setdefaultencoding('utf-8')
+# Python 3: utf-8 is the default encoding, no reload needed
 
 VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
 
