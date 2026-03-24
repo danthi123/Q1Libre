@@ -42,6 +42,18 @@ def _build_tar_xz(source_dir: Path) -> bytes:
         for item in sorted(source_dir.rglob("*")):
             rel = item.relative_to(source_dir)
             arcname = "./" + rel.as_posix()
+            # For text files (scripts, configs), strip Windows CRLF line endings
+            # so they work correctly on Linux. Binary files are left as-is.
+            if item.is_file() and item.suffix in (
+                "", ".py", ".sh", ".cfg", ".conf", ".txt", ".md", ".service",
+            ):
+                data = item.read_bytes()
+                if b"\r\n" in data:
+                    data = data.replace(b"\r\n", b"\n")
+                    info = tf.gettarinfo(str(item), arcname=arcname)
+                    info.size = len(data)
+                    tf.addfile(info, io.BytesIO(data))
+                    continue
             # Use recursive=False to avoid tf.add() re-adding children
             # of directories (we iterate over them individually via rglob).
             tf.add(str(item), arcname=arcname, recursive=False)
