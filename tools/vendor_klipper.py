@@ -18,14 +18,14 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
-# Pinned Klipper commit SHA — latest master at time of vendoring.
+# Pinned Klipper commit SHA — danthi123/klipper q1-pro branch.
 # Re-run this tool with --update to refresh to a newer commit.
-PINNED_SHA = "594ec7e1205450ff0753d19f0724bbe8b380465d"
+PINNED_SHA = "9ffde40ab951993aca71dc31f3c57b30993acebf"
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "overlay" / "home" / "mks" / "klipper"
-GITHUB_API = "https://api.github.com/repos/Klipper3d/klipper/commits/master"
-GITHUB_TARBALL = "https://github.com/Klipper3d/klipper/archive/{sha}.tar.gz"
+GITHUB_API = "https://api.github.com/repos/danthi123/klipper/commits/q1-pro"
+GITHUB_TARBALL = "https://github.com/danthi123/klipper/archive/{sha}.tar.gz"
 
 
 def _safe_extractall(tf: tarfile.TarFile, dest: Path) -> None:
@@ -40,8 +40,8 @@ def _safe_extractall(tf: tarfile.TarFile, dest: Path) -> None:
 
 
 def get_latest_sha() -> str:
-    """Fetch the latest Klipper master commit SHA from GitHub API."""
-    print("Fetching latest Klipper commit SHA from GitHub...")
+    """Fetch the latest Klipper q1-pro commit SHA from GitHub API."""
+    print("Fetching latest Klipper q1-pro commit SHA from GitHub...")
     req = urllib.request.Request(
         GITHUB_API,
         headers={"Accept": "application/vnd.github.v3+json",
