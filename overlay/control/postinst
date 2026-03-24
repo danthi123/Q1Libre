@@ -266,7 +266,7 @@ fi
 
 # Reset git repo to the vendored upstream commit so update_manager sees a clean repo
 KLIPPER_VERSION="v0.13.0-q1pro"
-KLIPPER_SHA="a28e64cb3cfe62ba3ffdae7a3e3f4741bbaebbfe"
+KLIPPER_SHA="fc122d07be3c94f2e3b24dbb5a22e2ca4f7d2ab7"
 cd /home/mks/klipper
 if [ -d .git ]; then
     git config user.email "q1libre@local"
