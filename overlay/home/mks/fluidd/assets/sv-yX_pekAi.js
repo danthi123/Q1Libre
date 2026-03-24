@@ -1,0 +1,1 @@
+var a={app:{bedmesh:{label:{mesh_matrix:"Mesh matrix",base:"bas",flat_surface:"Visa platt plan",profile_name:"Profilnamn",scale:"Färgskala",wireframe:"Trådram",active:"aktiv",remove_profile:"Ta bort %{name} profil"},msg:{hint:"Om det sparas som något annat än %{name}, kan du välja att också ta bort %{name} profilen"}}}};export{a as default};

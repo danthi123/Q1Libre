@@ -259,13 +259,13 @@ def test_control_overlay_empty_dir_does_not_pollute_data():
         assert "STOCK" in postinst
 
 
-def test_moonraker_has_mainsail_update_manager():
-    """overlay moonraker.conf must include an [update_manager mainsail] section."""
+def test_moonraker_has_fluidd_update_manager():
+    """overlay moonraker.conf must include an [update_manager fluidd] section."""
     moonraker = Path(__file__).resolve().parent.parent / "overlay" / "home" / "mks" / "klipper_config" / "moonraker.conf"
     assert moonraker.exists()
     content = moonraker.read_text()
-    assert "[update_manager mainsail]" in content
-    assert "mainsail-crew/mainsail" in content
+    assert "[update_manager fluidd]" in content
+    assert "fluidd-core/fluidd" in content
 
 
 def test_patched_postinst_content():
@@ -315,4 +315,4 @@ def test_phase2b_version_string():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert hasattr(mod, "DEFAULT_VERSION"), "build.py must have DEFAULT_VERSION constant"
-    assert "0.2.1" in mod.DEFAULT_VERSION, f"Expected 0.2.1 in version, got: {mod.DEFAULT_VERSION!r}"
+    assert "0.3.0" in mod.DEFAULT_VERSION, f"Expected 0.3.0 in version, got: {mod.DEFAULT_VERSION!r}"

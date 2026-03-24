@@ -152,8 +152,8 @@ def test_phase1_patches_in_built_deb():
         assert any("logrotate" in n for n in data_names), "logrotate config missing from data"
         assert any("q1libre_info.sh" in n for n in data_names), "q1libre_info.sh missing from data"
 
-        # moonraker.conf must have mainsail
-        assert "[update_manager mainsail]" in moonraker_content
+        # moonraker.conf must have fluidd update manager
+        assert "[update_manager fluidd]" in moonraker_content
 
         # .bashrc must have aliases
         assert "alias klog=" in bashrc_content
@@ -201,7 +201,7 @@ def test_no_python38_debs_in_built_deb(tmp_path: Path) -> None:
         overlay_dir=OVERLAY_DIR,
         patches_dir=PATCHES_DIR,
         output_path=output_deb,
-        q1libre_version="0.2.1",
+        q1libre_version="0.3.0",
     )
     assert output_deb.exists(), "build must produce output file"
 

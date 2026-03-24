@@ -206,6 +206,14 @@ ln -sf /home/mks/moonraker/moonraker/thirdparty /home/mks/moonraker/thirdparty
 
 echo "Q1Libre: Moonraker upgrade complete"
 
+# Q1Libre: Create printer_data symlinks for new Moonraker directory layout
+mkdir -p /home/mks/printer_data
+# Only create symlinks if they don't already exist as symlinks
+[ -L /home/mks/printer_data/config ] || (rm -rf /home/mks/printer_data/config && ln -sf /home/mks/klipper_config /home/mks/printer_data/config)
+[ -L /home/mks/printer_data/gcodes ] || (rm -rf /home/mks/printer_data/gcodes && ln -sf /home/mks/gcode_files /home/mks/printer_data/gcodes)
+[ -L /home/mks/printer_data/logs ] || (rm -rf /home/mks/printer_data/logs && ln -sf /home/mks/klipper_logs /home/mks/printer_data/logs)
+chown -h mks:mks /home/mks/printer_data /home/mks/printer_data/config /home/mks/printer_data/gcodes /home/mks/printer_data/logs
+
 #重启各类服务令
 if [ "$method_value" = "0" ]; then
     echo "LAN only, only reloading and restarting klipper and moonraker"
