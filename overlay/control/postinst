@@ -349,6 +349,12 @@ mkdir -p /home/mks/printer_data
 [ -L /home/mks/printer_data/logs ] || (rm -rf /home/mks/printer_data/logs && ln -sf /home/mks/klipper_logs /home/mks/printer_data/logs)
 chown -h mks:mks /home/mks/printer_data /home/mks/printer_data/config /home/mks/printer_data/gcodes /home/mks/printer_data/logs
 
+# Q1Libre: Enable mDNS/Avahi if available
+if command -v avahi-daemon >/dev/null 2>&1; then
+    systemctl enable avahi-daemon 2>/dev/null || true
+    systemctl restart avahi-daemon 2>/dev/null || true
+fi
+
 #重启各类服务令
 if [ "$method_value" = "0" ]; then
     echo "LAN only, only reloading and restarting klipper and moonraker"
