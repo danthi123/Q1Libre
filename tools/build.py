@@ -185,19 +185,21 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="dist/QD_Q1_SOC",
-        help="Output .deb path (default: dist/QD_Q1_SOC)",
+        default=None,
+        help="Output .deb path (default: dist/q1libre-v<VERSION>.deb)",
     )
     parser.add_argument(
         "--version", default=DEFAULT_VERSION, help=f"Q1Libre version (default: {DEFAULT_VERSION})"
     )
     args = parser.parse_args()
 
+    output = args.output or f"dist/q1libre-v{args.version}.deb"
+
     build_firmware(
         base_dir=Path(args.base),
         overlay_dir=Path(args.overlay),
         patches_dir=Path(args.patches),
-        output_path=Path(args.output),
+        output_path=Path(output),
         q1libre_version=args.version,
     )
 
