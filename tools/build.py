@@ -38,7 +38,7 @@ def _build_tar_xz(source_dir: Path) -> bytes:
         Compressed bytes (xz format).
     """
     tar_buf = io.BytesIO()
-    with tarfile.open(fileobj=tar_buf, mode="w") as tf:
+    with tarfile.open(fileobj=tar_buf, mode="w", format=tarfile.GNU_FORMAT) as tf:
         for item in sorted(source_dir.rglob("*")):
             rel = item.relative_to(source_dir)
             arcname = "./" + rel.as_posix()
