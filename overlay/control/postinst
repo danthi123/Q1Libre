@@ -314,7 +314,7 @@ chown -R mks:mks /home/mks/moonraker
 
 # Reset git repo to the vendored upstream commit so update_manager sees a clean repo
 # This allows the update manager to track and update Moonraker from the UI
-VENDORED_SHA="4ba6fd228f264564f6613197fd9abb18ec068cf4"
+VENDORED_SHA="1ed102edfb34906115bfeb02712d4c839b93a7a9"
 if [ -d /home/mks/moonraker/.git ]; then
     cd /home/mks/moonraker
     git config user.email "q1libre@local"

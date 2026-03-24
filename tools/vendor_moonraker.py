@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Pinned Moonraker commit SHA — latest master at time of vendoring.
 # Re-run this tool with --update to refresh to a newer commit.
-PINNED_SHA = "4ba6fd228f264564f6613197fd9abb18ec068cf4"
+PINNED_SHA = "1ed102edfb34906115bfeb02712d4c839b93a7a9"
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "overlay" / "home" / "mks" / "moonraker"
