@@ -242,7 +242,7 @@ class VirtualSD:
         file_path = "/home/mks/scripts/plr/plr_record"
         if os.path.exists(file_path):
             os.remove(file_path)
-        plr_file = open(file_path, 'w', buffering=0)
+        plr_file = open(file_path, 'w', buffering=1)
 
         while not self.must_pause_work:
             if not lines:
