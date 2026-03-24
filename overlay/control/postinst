@@ -206,16 +206,42 @@ chown -R mks:mks /home/mks/klipper
 echo "Q1Libre: rebuilding klippy-env with Python 3..."
 if [ -d /home/mks/klippy-env ]; then
     cp -a /home/mks/klippy-env /home/mks/klippy-env.bak
+    rm -rf /home/mks/klippy-env
 fi
-/usr/bin/virtualenv -p python3 --clear /home/mks/klippy-env 2>/dev/null
+/usr/bin/virtualenv -p python3 /home/mks/klippy-env 2>/dev/null
 if [ -x /home/mks/klippy-env/bin/pip ]; then
     # Install from bundled wheels first (offline), fall back to PyPI if needed
     if [ -d /root/klippy-wheels ] && ls /root/klippy-wheels/*.whl >/dev/null 2>&1; then
         echo "Q1Libre: installing klippy packages from bundled wheels..."
-        /home/mks/klippy-env/bin/pip install /root/klippy-wheels/*.whl 2>&1 || true
-        # Install python-can from source tarball if present
-        if [ -f /root/klippy-wheels/python-can-*.tar.gz ]; then
-            /home/mks/klippy-env/bin/pip install /root/klippy-wheels/python-can-*.tar.gz 2>&1 || true
+        # Step 1: Bootstrap pip and setuptools FIRST
+        # Stock virtualenv 15.1 bundles pip 18.1 which can't handle manylinux_2_17 wheels.
+        # We must upgrade pip+setuptools before installing any native wheels.
+        if ls /root/klippy-wheels/pip-*.whl >/dev/null 2>&1; then
+            echo "Q1Libre: bootstrapping pip..."
+            /home/mks/klippy-env/bin/pip install --no-index /root/klippy-wheels/pip-*.whl 2>&1 || true
+        fi
+        if ls /root/klippy-wheels/setuptools-*.whl >/dev/null 2>&1; then
+            echo "Q1Libre: bootstrapping setuptools..."
+            /home/mks/klippy-env/bin/pip install --no-index /root/klippy-wheels/setuptools-*.whl 2>&1 || true
+        fi
+        # Step 2: Install all remaining wheels (greenlet, cffi, pycparser,
+        # Jinja2, markupsafe, pyserial, wrapt, aenum)
+        echo "Q1Libre: installing klippy wheel packages..."
+        /home/mks/klippy-env/bin/pip install --no-index --find-links /root/klippy-wheels \
+            /root/klippy-wheels/greenlet-*.whl \
+            /root/klippy-wheels/cffi-*.whl \
+            /root/klippy-wheels/pycparser-*.whl \
+            /root/klippy-wheels/Jinja2-*.whl \
+            /root/klippy-wheels/MarkupSafe-*.whl \
+            /root/klippy-wheels/pyserial-*.whl \
+            /root/klippy-wheels/wrapt-*.whl \
+            /root/klippy-wheels/aenum-*.whl \
+            2>&1 || echo "Q1Libre: WARNING - some wheel installs had errors"
+        # Step 3: Install python-can from source tarball (needs setuptools)
+        if ls /root/klippy-wheels/python-can-*.tar.gz >/dev/null 2>&1; then
+            echo "Q1Libre: installing python-can from sdist..."
+            /home/mks/klippy-env/bin/pip install --no-index --find-links /root/klippy-wheels \
+                /root/klippy-wheels/python-can-*.tar.gz 2>&1 || true
         fi
         rm -rf /root/klippy-wheels 2>/dev/null || true
         echo "Q1Libre: klippy packages installed"
