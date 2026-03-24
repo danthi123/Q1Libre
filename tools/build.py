@@ -21,7 +21,7 @@ from pathlib import Path
 from tools.deb import build_deb
 from tools.version import read_version, write_version
 
-DEFAULT_VERSION = "0.2.0-phase2a"
+DEFAULT_VERSION = "0.2.1"
 
 
 def _build_tar_xz(source_dir: Path) -> bytes:
@@ -42,7 +42,9 @@ def _build_tar_xz(source_dir: Path) -> bytes:
         for item in sorted(source_dir.rglob("*")):
             rel = item.relative_to(source_dir)
             arcname = "./" + rel.as_posix()
-            tf.add(str(item), arcname=arcname)
+            # Use recursive=False to avoid tf.add() re-adding children
+            # of directories (we iterate over them individually via rglob).
+            tf.add(str(item), arcname=arcname, recursive=False)
 
     return lzma.compress(tar_buf.getvalue(), preset=6)
 

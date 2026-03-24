@@ -305,8 +305,8 @@ def test_sudoers_override_exists():
     assert "ALL=(ALL) ALL" not in content
 
 
-def test_phase2a_version_string():
-    """Default build version must reflect Phase 2A."""
+def test_phase2b_version_string():
+    """Default build version must reflect Phase 2B."""
     import importlib.util
     from pathlib import Path
     spec = importlib.util.spec_from_file_location(
@@ -315,4 +315,4 @@ def test_phase2a_version_string():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert hasattr(mod, "DEFAULT_VERSION"), "build.py must have DEFAULT_VERSION constant"
-    assert "0.2.0" in mod.DEFAULT_VERSION, f"Expected 0.2.0 in version, got: {mod.DEFAULT_VERSION!r}"
+    assert "0.2.1" in mod.DEFAULT_VERSION, f"Expected 0.2.1 in version, got: {mod.DEFAULT_VERSION!r}"

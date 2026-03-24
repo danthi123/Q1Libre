@@ -9,13 +9,6 @@ def _src() -> str:
     return POSTINST.read_text(encoding="utf-8")
 
 
-def test_postinst_installs_python38_debs():
-    """postinst must install the bundled python3.8 deb packages."""
-    src = _src()
-    assert "python38_debs" in src, "must reference python38_debs directory"
-    assert "dpkg -i" in src, "must use dpkg -i to install packages"
-
-
 def test_postinst_backs_up_moonraker():
     """postinst must back up existing moonraker before replacing."""
     src = _src()
@@ -28,20 +21,27 @@ def test_postinst_chowns_new_moonraker():
     assert "chown -R mks:mks /home/mks/moonraker" in src
 
 
-def test_postinst_rebuilds_moonraker_venv_with_python38():
-    """postinst must rebuild the moonraker venv using python3.8."""
+def test_postinst_creates_thirdparty_symlink():
+    """postinst must create the thirdparty symlink for module resolution."""
     src = _src()
-    assert "python3.8" in src, "must use python3.8 to rebuild venv"
-    assert "moonraker-env" in src, "must reference moonraker-env"
-    # venv rebuild: either 'python3.8 -m venv' or recreating with python3.8
-    assert "-m venv" in src, "must use -m venv to create the venv"
+    assert "ln -sf /home/mks/moonraker/moonraker/thirdparty /home/mks/moonraker/thirdparty" in src
 
 
-def test_postinst_pip_installs_moonraker_requirements():
-    """postinst must pip install moonraker requirements after venv rebuild."""
+def test_postinst_no_python38():
+    """postinst must NOT reference python3.8 (removed in Phase 2B)."""
     src = _src()
-    assert "moonraker-requirements.txt" in src or "moonraker/scripts/" in src
-    assert "pip install" in src
+    assert "python3.8" not in src, "python3.8 references must be removed"
+    assert "python38_debs" not in src, "python38_debs references must be removed"
+
+
+def test_postinst_protects_moonraker_conf():
+    """postinst must uncomment update_manager after merge.py runs."""
+    src = _src()
+    merge_pos = src.find("merge.py")
+    sed_pos = src.find("sed -i 's/^# \\[update_manager\\]")
+    assert merge_pos != -1, "merge.py call not found"
+    assert sed_pos != -1, "update_manager sed fix not found"
+    assert sed_pos > merge_pos, "update_manager fix must come after merge.py call"
 
 
 def test_postinst_upgrade_block_before_restart():

@@ -193,15 +193,15 @@ def test_moonraker_in_built_deb(tmp_path: Path) -> None:
 
 
 @skip_no_stock
-def test_python38_debs_in_built_deb(tmp_path: Path) -> None:
-    """Built deb must contain the python3.8 .deb packages."""
+def test_no_python38_debs_in_built_deb(tmp_path: Path) -> None:
+    """Built deb must NOT contain python3.8 .deb packages (removed in Phase 2B)."""
     output_deb = tmp_path / "q1libre-test.deb"
     build_firmware(
         base_dir=BASE_DIR,
         overlay_dir=OVERLAY_DIR,
         patches_dir=PATCHES_DIR,
         output_path=output_deb,
-        q1libre_version="0.2.0-phase2a",
+        q1libre_version="0.2.1",
     )
     assert output_deb.exists(), "build must produce output file"
 
@@ -211,4 +211,4 @@ def test_python38_debs_in_built_deb(tmp_path: Path) -> None:
             names = tf.getnames()
 
     py38_files = [n for n in names if "python38_debs" in n and ".deb" in n]
-    assert py38_files, f"python3.8 .deb packages not found in built deb. Files: {names[:30]}"
+    assert not py38_files, f"python3.8 .deb packages must not be in built deb, found: {py38_files}"

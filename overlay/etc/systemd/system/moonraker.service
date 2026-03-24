@@ -1,0 +1,16 @@
+#Systemd service file for moonraker
+[Unit]
+Description=Starts Moonraker on startup
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=simple
+User=mks
+RemainAfterExit=yes
+WorkingDirectory=/home/mks/moonraker
+ExecStart=/home/mks/moonraker-env/bin/python /home/mks/moonraker/moonraker/moonraker.py -c /home/mks/klipper_config/moonraker.conf -l /tmp/moonraker.log
+Restart=always
+RestartSec=10
