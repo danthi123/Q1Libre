@@ -174,16 +174,6 @@ chmod 700 /root/xindi/build/xindi
 chown -R mks:mks /home/mks/klipper/
 chown -R mks:mks /home/mks/klipper_config/
 
-# Q1Libre: Commit klipper overlay changes so update_manager sees a clean repo
-if [ -d /home/mks/klipper/.git ]; then
-    cd /home/mks/klipper
-    git config user.email "q1libre@local"
-    git config user.name "Q1Libre"
-    git add -A
-    git commit -m "Q1Libre: Qidi klipper with patches" --allow-empty 2>/dev/null || true
-    chown -R mks:mks /home/mks/klipper/.git
-    cd /
-fi
 chmod 700 /usr/bin/makerbase-automount
 # Q1Libre: set correct sudoers permissions
 chmod 0440 /etc/sudoers.d/q1libre 2>/dev/null || true
@@ -194,6 +184,90 @@ if [ -f /root/q1libre_version.txt ]; then
     echo "  Version: $(cat /root/q1libre_version.txt)" >> /var/log/q1libre_install.log
     echo "  Date: $(date)" >> /var/log/q1libre_install.log
 fi
+
+# Q1Libre Phase 2B: Upgrade Klipper to managed fork (danthi123/klipper q1-pro)
+echo "Q1Libre: upgrading Klipper..."
+# Stop klipper before replacing files
+systemctl stop klipper.service 2>/dev/null || true
+echo "Q1Libre: klipper stopped for upgrade"
+
+# Back up existing klipper for rollback
+if [ -d /home/mks/klipper ]; then
+    rm -rf /home/mks/klipper.bak
+    cp -a /home/mks/klipper /home/mks/klipper.bak \
+        || echo "Q1Libre: WARNING - klipper backup failed, rollback not available"
+    echo "Q1Libre: klipper backed up to /home/mks/klipper.bak"
+fi
+
+# New klipper tree is placed by dpkg from overlay — set ownership
+chown -R mks:mks /home/mks/klipper
+
+# Rebuild klippy-env with Python 3 for upstream Klipper v0.13
+echo "Q1Libre: rebuilding klippy-env with Python 3..."
+if [ -d /home/mks/klippy-env ]; then
+    cp -a /home/mks/klippy-env /home/mks/klippy-env.bak
+fi
+/usr/bin/virtualenv -p python3 --clear /home/mks/klippy-env 2>/dev/null
+if [ -x /home/mks/klippy-env/bin/pip ]; then
+    # Install from bundled wheels first (offline), fall back to PyPI if needed
+    if [ -d /root/klippy-wheels ] && ls /root/klippy-wheels/*.whl >/dev/null 2>&1; then
+        echo "Q1Libre: installing klippy packages from bundled wheels..."
+        /home/mks/klippy-env/bin/pip install /root/klippy-wheels/*.whl 2>&1 || true
+        # Install python-can from source tarball if present
+        if [ -f /root/klippy-wheels/python-can-*.tar.gz ]; then
+            /home/mks/klippy-env/bin/pip install /root/klippy-wheels/python-can-*.tar.gz 2>&1 || true
+        fi
+        rm -rf /root/klippy-wheels 2>/dev/null || true
+        echo "Q1Libre: klippy packages installed"
+    else
+        echo "Q1Libre: installing klippy packages from PyPI..."
+        /home/mks/klippy-env/bin/pip install -r /home/mks/klipper/scripts/klippy-requirements.txt \
+            --quiet 2>/dev/null \
+            || echo "Q1Libre: WARNING - klippy pip install had errors"
+    fi
+    chown -R mks:mks /home/mks/klippy-env
+    echo "Q1Libre: klippy-env rebuilt with Python 3"
+else
+    echo "Q1Libre: WARNING - klippy-env rebuild failed, restoring backup"
+    rm -rf /home/mks/klippy-env
+    cp -a /home/mks/klippy-env.bak /home/mks/klippy-env
+fi
+
+# Reset git repo to the vendored upstream commit so update_manager sees a clean repo
+KLIPPER_SHA="fbc6ba97789a5544d663331456a34d4592aa3a0c"
+if [ -d /home/mks/klipper/.git ]; then
+    cd /home/mks/klipper
+    git config user.email "q1libre@local"
+    git config user.name "Q1Libre"
+    git fetch origin 2>/dev/null || true
+    git reset --hard $KLIPPER_SHA 2>/dev/null \
+        || echo "Q1Libre: WARNING - klipper git reset failed"
+    git remote set-url origin https://github.com/danthi123/klipper.git
+    git branch --set-upstream-to=origin/q1-pro master 2>/dev/null || true
+    chown -R mks:mks /home/mks/klipper/.git
+    cd /
+fi
+
+# Pre-compile c_helper.so (takes ~30s on ARM, avoids timeout on first startup)
+echo "Q1Libre: compiling klipper C helper..."
+rm -f /home/mks/klipper/klippy/chelper/c_helper.so
+cd /home/mks/klipper/klippy/chelper
+/home/mks/klippy-env/bin/python -c "
+import sys; sys.path.insert(0, '..')
+import chelper; chelper.get_ffi()
+" 2>&1 && echo "Q1Libre: c_helper compiled" || echo "Q1Libre: WARNING - c_helper compilation failed, will compile on first startup"
+chown mks:mks /home/mks/klipper/klippy/chelper/c_helper.so 2>/dev/null || true
+cd /
+
+# Link timelapse macros config if available
+if [ -f /home/mks/moonraker-timelapse/klipper_macro/timelapse.cfg ]; then
+    ln -sf /home/mks/moonraker-timelapse/klipper_macro/timelapse.cfg /home/mks/klipper_config/timelapse.cfg
+    chown -h mks:mks /home/mks/klipper_config/timelapse.cfg
+fi
+
+# Config migration not needed - fork supports all Qidi config options natively
+
+echo "Q1Libre: Klipper upgrade complete"
 
 # Q1Libre Phase 2A: Upgrade Moonraker
 echo "Q1Libre: upgrading Moonraker..."
