@@ -21,6 +21,15 @@ class InputShaperParams:
                                              shaper_defs.DEFAULT_DAMPING_RATIO,
                                              minval=0., maxval=1.)
         self.shaper_freq = config.getfloat('shaper_freq_' + axis, 0., minval=0.)
+        # Custom shaper coefficients (comma-separated floats)
+        self.custom_a = []
+        self.custom_t = []
+        if self.shaper_type == 'custom':
+            a_str = config.get('shaper_a_' + axis, '')
+            t_str = config.get('shaper_t_' + axis, '')
+            if a_str and t_str:
+                self.custom_a = [float(x.strip()) for x in a_str.split(',')]
+                self.custom_t = [float(x.strip()) for x in t_str.split(',')]
     def update(self, gcmd):
         axis = self.axis.upper()
         self.damping_ratio = gcmd.get_float('DAMPING_RATIO_' + axis,
@@ -34,18 +43,30 @@ class InputShaperParams:
         if shaper_type.lower() not in self.shapers:
             raise gcmd.error('Unsupported shaper type: %s' % (shaper_type,))
         self.shaper_type = shaper_type.lower()
+        # Parse custom shaper coefficients from gcode command
+        a_str = gcmd.get('SHAPER_A_' + axis, '')
+        t_str = gcmd.get('SHAPER_T_' + axis, '')
+        if a_str and t_str:
+            self.custom_a = [float(x.strip()) for x in a_str.split(',')]
+            self.custom_t = [float(x.strip()) for x in t_str.split(',')]
     def get_shaper(self):
-        if not self.shaper_freq:
+        if not self.shaper_freq and self.shaper_type != 'custom':
             A, T = shaper_defs.get_none_shaper()
+        elif self.shaper_type == 'custom' and self.custom_a:
+            A, T = self.custom_a, self.custom_t
         else:
             A, T = self.shapers[self.shaper_type](
                     self.shaper_freq, self.damping_ratio)
         return len(A), A, T
     def get_status(self):
-        return collections.OrderedDict([
+        status = collections.OrderedDict([
             ('shaper_type', self.shaper_type),
             ('shaper_freq', '%.3f' % (self.shaper_freq,)),
             ('damping_ratio', '%.6f' % (self.damping_ratio,))])
+        if self.shaper_type == 'custom':
+            status['shaper_a'] = ','.join('%.6f' % a for a in self.custom_a)
+            status['shaper_t'] = ','.join('%.6f' % t for t in self.custom_t)
+        return status
 
 class AxisInputShaper:
     def __init__(self, axis, config):

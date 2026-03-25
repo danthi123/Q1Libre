@@ -227,7 +227,7 @@ fi
 
 # Git repo setup for klipper
 KLIPPER_VERSION="v0.13.0-q1pro"
-KLIPPER_SHA="2dfd934bfa9be353646fccdaa176bf3f547b44da"
+KLIPPER_SHA="7740b479e94084866a74a5b0c4a59d566aa90d08"
 cd /home/mks/klipper
 rm -rf .git
 git init 2>/dev/null

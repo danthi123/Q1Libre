@@ -91,6 +91,12 @@ def get_3hump_ei_shaper(shaper_freq, damping_ratio):
     T = [0., .5*t_d, t_d, 1.5*t_d, 2.*t_d]
     return (A, T)
 
+def get_custom_shaper(shaper_freq, damping_ratio):
+    """Custom shaper -- coefficients loaded from config, not computed."""
+    # This is a placeholder; actual A, T values are set by InputShaperParams
+    # when shaper_type is 'custom'. The freq parameter is ignored.
+    return ([], [])
+
 # min_freq for each shaper is chosen to have projected max_accel ~= 1500
 INPUT_SHAPERS = [
     InputShaperCfg('zv', get_zv_shaper, min_freq=21.),
@@ -99,4 +105,5 @@ INPUT_SHAPERS = [
     InputShaperCfg('ei', get_ei_shaper, min_freq=29.),
     InputShaperCfg('2hump_ei', get_2hump_ei_shaper, min_freq=39.),
     InputShaperCfg('3hump_ei', get_3hump_ei_shaper, min_freq=48.),
+    InputShaperCfg('custom', get_custom_shaper, min_freq=0.),
 ]
