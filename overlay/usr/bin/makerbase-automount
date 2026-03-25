@@ -1,0 +1,132 @@
+#!/bin/sh
+#$1 = <dev>
+
+# Default options to use for mounting
+AUTOMOUNT_OPTS='users'
+# Default type to use for mounting
+AUTOMOUNT_TYPE='auto'
+
+# Directory to look for type-specific settings
+confdir=/etc/makerbase-automount.d
+
+# Directory to use as parent media dir for mountpoints
+# mediadir=/media
+mediadir=/home/mks/gcode_files
+
+[ $(id -u) != 0 ] && {
+    echo "This tool requires root permissions"
+    exit 1
+}
+
+log() {
+    echo "$*" | systemd-cat -p ${loglevel:-info} -t "media-automount"
+}
+
+alias debuglog="loglevel=debug log"
+alias errorlog="loglevel=err log"
+
+if ! [ "$1" ]
+then
+    errorlog "missing arguments! a device name must be provided"
+    exit 1
+else
+    dev=/dev/${1##/*/}
+fi
+
+# Q1Libre: clean up stale mount points for devices that no longer exist
+for stale_dev in sda1 sdb1; do
+    if ! [ -b /dev/$stale_dev ] && [ -d "$mediadir/$stale_dev" ]; then
+        if mountpoint -q "$mediadir/$stale_dev" 2>/dev/null; then
+            umount -lf /dev/$stale_dev 2>/dev/null
+        fi
+        rmdir "$mediadir/$stale_dev" 2>/dev/null
+    fi
+done
+
+# Check if the device exists, if not but mounted, umount it
+if ! [ -b $dev ]
+then
+    if grep /etc/mtab -qe "^$dev"
+    then
+        log "$dev device removed, umounting and cleaning $mediadir"
+        if umount -lf "$dev"
+        then
+            exitcode=0
+        else
+            exitcode=$?
+            errorlog "Error umounting $dev errcode:$exitcode"
+            errorlog "Command was: umount $dev"
+        fi
+    else
+        # prevent it from failing on nonexistent devices and degrading systemctl boot
+        exitcode=0
+        errorlog "device doesn't exist anymore or is not a block device: $dev"
+    fi
+
+    # cleanup
+    for dir in "$mediadir"/*
+    do
+        # Only clean non active mountpoints that have no /etc/fstab entry
+        if [ -d "$dir" ] && ! mountpoint -q "$dir" && awk '$2=="'$dir'"{exit 1}' /etc/fstab; then
+            rmdir "$dir"
+        fi
+    done
+    exit $exitcode
+fi
+
+# Load additional info for the block device
+eval $(blkid -po export $dev)
+
+# Devices with unknown type will be ignored
+if [ -z "$TYPE" ]
+then
+    debuglog "$dev has no known filesystem type, ignoring mount request"
+    exit 0
+fi
+
+# Check /etc/fstab for an entry corresponding to the device
+[ "$UUID" ] && fstab=$(grep /etc/fstab -e "^[^#]*${UUID}") || \
+[ "$LABEL" ] && fstab=$(grep /etc/fstab -e "^[^#]*${LABEL}") || \
+fstab=$(grep /etc/fstab -e "^[ \t]*$dev[ \t]")
+
+# Don't manage devices that are already in fstab
+if [ "$fstab" ]
+then
+    debuglog "$dev already in /etc/fstab, automount won't manage it: ${fstab#\t}"
+    exit 0
+fi
+
+# Q1Libre: If this device is already mounted, skip (prevents duplicate mounts)
+if grep -q "^$dev " /etc/mtab 2>/dev/null; then
+    log "$dev is already mounted, skipping"
+    exit 0
+fi
+
+# directory name — use the device name (e.g. sda1)
+AUTOMOUNT_DIR="${mediadir}/${1##*/}"
+
+# Load Filesystem-specific configuration for mounting
+if [ -e "$confdir/$TYPE" ]
+then
+    debuglog "loading configuration for fs type $TYPE"
+    . "$confdir/$TYPE"
+elif [ -e "$confdir/auto" ]
+then
+    . "$confdir/auto"
+fi
+
+
+log "mounting device $dev in $AUTOMOUNT_DIR"
+mkdir -p "$AUTOMOUNT_DIR"
+if mount -t "$AUTOMOUNT_TYPE" -o "$AUTOMOUNT_OPTS" "$dev" "$AUTOMOUNT_DIR"
+then
+    # Notify
+    username="$(ps au | awk '$11 ~ /^xinit/ { print $1; exit }')"
+    [ "$username" ] && DISPLAY=:0 runuser -u "$username" xdg-open "$AUTOMOUNT_DIR"
+    log "Device successfully mounted: $AUTOMOUNT_DIR"
+else
+    errorlog "Mount error: $?"
+    errorlog "Command was : mount -t $AUTOMOUNT_TYPE -o $AUTOMOUNT_OPTS $dev $AUTOMOUNT_DIR"
+
+    rmdir "$AUTOMOUNT_DIR"
+fi

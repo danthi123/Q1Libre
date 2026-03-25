@@ -191,7 +191,17 @@ def main() -> None:
     parser.add_argument(
         "--version", default=DEFAULT_VERSION, help=f"Q1Libre version (default: {DEFAULT_VERSION})"
     )
+    parser.add_argument(
+        "--update-deps", action="store_true",
+        help="Fetch latest stable Klipper, Moonraker, and Fluidd before building",
+    )
     args = parser.parse_args()
+
+    if args.update_deps:
+        from tools.fetch_latest import fetch_fluidd, fetch_klipper, fetch_moonraker
+        fetch_klipper()
+        fetch_moonraker()
+        fetch_fluidd()
 
     output = args.output or f"dist/q1libre-v{args.version}.deb"
 
