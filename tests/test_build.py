@@ -274,7 +274,7 @@ def test_patched_postinst_content():
     assert postinst.exists(), "overlay/control/postinst must exist"
     content = postinst.read_text(encoding="utf-8")
     assert "chmod 777" not in content, "chmod 777 must be removed"
-    assert "resolv.conf" not in content, "hardcoded DNS override must be removed"
+    assert "223.6.6.6" not in content, "Chinese DNS must not be in postinst"
     assert "sysctl.conf" not in content, "IPv6 disable must be removed"
     assert "chmod 755" in content or "chmod 644" in content, "proper permissions must be set"
     assert "chmod 0440 /etc/sudoers.d/q1libre" in content, "sudoers perm guard must be present"
@@ -330,4 +330,4 @@ def test_phase2b_version_string():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert hasattr(mod, "DEFAULT_VERSION"), "build.py must have DEFAULT_VERSION constant"
-    assert "0.5.6" in mod.DEFAULT_VERSION, f"Expected 0.5.6 in version, got: {mod.DEFAULT_VERSION!r}"
+    assert "0.5.7" in mod.DEFAULT_VERSION, f"Expected 0.5.7 in version, got: {mod.DEFAULT_VERSION!r}"

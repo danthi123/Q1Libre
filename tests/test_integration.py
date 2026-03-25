@@ -165,7 +165,7 @@ def test_phase1_patches_in_built_deb():
                 postinst = tf.extractfile("./postinst").read().decode()
 
         assert "chmod 777" not in postinst, "chmod 777 must not be in postinst"
-        assert "resolv.conf" not in postinst, "hardcoded DNS must not be in postinst"
+        assert "223.6.6.6" not in postinst, "Chinese DNS must not be in postinst"
         assert "sysctl.conf" not in postinst, "IPv6 disable must not be in postinst"
         assert "q1libre_version.txt" in postinst, "Q1Libre marker must be in postinst"
 

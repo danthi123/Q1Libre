@@ -43,6 +43,20 @@ fi
 # 由于armbian官方的更新 buster似乎不再被支持，因此先注释掉armbian源
 sudo sed -i '1s/^/#/' /etc/apt/sources.list.d/armbian.list
 
+# Q1Libre: Remove hardcoded Chinese DNS, use DHCP-provided DNS with public fallbacks
+echo "Q1Libre: fixing DNS configuration..."
+# Replace resolv.conf with clean fallbacks (no Chinese DNS)
+cat > /etc/resolv.conf <<'DNSEOF'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+DNSEOF
+# Tell NetworkManager to manage DNS via DHCP (overrides static resolv.conf on reconnect)
+if [ -f /etc/NetworkManager/NetworkManager.conf ]; then
+    sed -i 's/^rc-manager=file/rc-manager=resolvconf/' /etc/NetworkManager/NetworkManager.conf
+    systemctl restart NetworkManager 2>/dev/null || true
+    echo "Q1Libre: DNS set to DHCP with 1.1.1.1/8.8.8.8 fallback"
+fi
+
 #删除旧的时间更新脚本
 rm -f /etc/profile.d/time_refresh.sh
 
@@ -181,6 +195,27 @@ chmod 700 /usr/bin/makerbase-automount
 # Q1Libre: set correct sudoers permissions
 chmod 0440 /etc/sudoers.d/q1libre 2>/dev/null || true
 
+# Q1Libre: Fix stock 777/666 permissions on safe directories
+echo "Q1Libre: fixing stock file permissions..."
+# Klipper source tree — all owned by mks, no executables needed except scripts/
+find /home/mks/klipper -type d -exec chmod 755 {} \;
+find /home/mks/klipper -type f -exec chmod 644 {} \;
+find /home/mks/klipper/scripts -type f -name "*.sh" -exec chmod 755 {} \;
+# Moonraker source tree
+find /home/mks/moonraker -type d -exec chmod 755 {} \;
+find /home/mks/moonraker -type f -exec chmod 644 {} \;
+find /home/mks/moonraker/scripts -type f -name "*.sh" -exec chmod 755 {} \;
+# Fluidd static files
+find /home/mks/fluidd -type d -exec chmod 755 {} \; 2>/dev/null
+find /home/mks/fluidd -type f -exec chmod 644 {} \; 2>/dev/null
+# Root scripts and config overlays
+find /root/scripts -type f -exec chmod 644 {} \; 2>/dev/null
+chmod 755 /root/scripts/*.sh 2>/dev/null
+find /root/etc -type f -exec chmod 644 {} \; 2>/dev/null
+# xindi support files (not the binary itself)
+chmod 644 /root/xindi/version /root/xindi/mks-id.sh 2>/dev/null
+echo "Q1Libre: permissions fixed"
+
 # Q1Libre: install version marker
 if [ -f /root/q1libre_version.txt ]; then
     echo "Q1Libre firmware installed" >> /var/log/q1libre_install.log
@@ -281,7 +316,7 @@ fi
 
 # Reset git repo to the vendored upstream commit so update_manager sees a clean repo
 KLIPPER_VERSION="v0.13.0-q1pro"
-KLIPPER_SHA="fc122d07be3c94f2e3b24dbb5a22e2ca4f7d2ab7"
+KLIPPER_SHA="2dfd934bfa9be353646fccdaa176bf3f547b44da"
 cd /home/mks/klipper
 if [ -d .git ]; then
     git config user.email "q1libre@local"

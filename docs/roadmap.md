@@ -7,19 +7,9 @@
 - Better pause/resume handling
 - Directly affects print behavior — needs careful testing on actual prints
 
-### chmod 777 Cleanup
-- Stock firmware sets 777 on many files and directories
-- Our new files use proper 755/644, but existing stock files remain at 777
-- Risk: xindi or other stock binaries may depend on world-writable permissions
-- Needs audit of which files xindi/klippy/moonraker actually write to
-
-### Hardcoded DNS Removal
-- Stock firmware hardcodes Chinese DNS servers
-- Should be switched to DHCP-provided DNS
-- Risk: could break network on setups where DHCP doesn't provide DNS
-
 ### Python 2→3 Compatibility Landmines
 - Found and fixed `buffering=0` in virtual_sdcard.py (PLR) during print testing
+- Found and fixed `unicode()` in display/menu.py (Qidi leftover)
 - There may be more lurking in rarely-executed code paths:
   - Error handlers
   - Edge cases in PLR recovery (power loss mid-print)
@@ -38,17 +28,25 @@
 ### Camera/Webcam Integration
 - Stock camera works but could benefit from better streaming options
 - WebRTC support available in Fluidd v1.36.2
+- Crowsnest could replace mjpg-streamer for better performance
 - Needs configuration and testing
 
 ### KAMP (Klipper Adaptive Meshing & Purging)
-- Partially present in printer config (macros exist)
-- Needs verification and documentation
-- Could improve first-layer quality and reduce waste
+- Already integrated (Adaptive_Mesh.cfg included, exclude_object enabled)
+- Needs slicer configuration (QIDISlicer EXCLUDE_OBJECT_DEFINE labels)
+- Add LINE_PURGE to slicer start gcode for adaptive purge lines
+- Documentation for users on how to enable/configure
 
 ### Moonraker Notifications
 - Push alerts to Telegram, Pushover, etc. on print events
-- Moonraker v0.10.0-19 supports this natively
-- Just needs configuration in moonraker.conf
+- moonraker-telegram-bot is Python 3.7 compatible, bundleable
+- Just needs wheels, systemd service, and user configuration
+
+### Spoolman (Filament Tracking)
+- Requires Python 3.9+ (not available on Debian Buster)
+- Best approach: run on external host (PC/NAS/Pi), connect via network
+- Commented [spoolman] config already in moonraker.conf
+- Fluidd 1.36.2 has full UI support once connected
 
 ### Timelapse Improvements
 - Currently enabled by default but basic
@@ -61,7 +59,7 @@
 - On page refresh, Fluidd briefly shows "No moonraker connection"
 - Goes through: blank → disconnected → reconnecting → connected
 - Takes several seconds to fully reconnect
-- Likely websocket reconnection timing — investigating
+- Normal behavior for websocket-based SPAs on RK3328
 
 ## Completed (for reference)
 
@@ -79,6 +77,12 @@
 - [x] Timelapse enabled
 - [x] Documentation (README, install guide, on-printer reference)
 - [x] eMMC backup instructions
-- [x] GitHub releases (v0.5.0 → v0.5.3)
+- [x] GitHub releases (v0.5.0 → v0.5.6)
 - [x] PLR Python 3 fix
 - [x] numpy/scipy for input shaper
+- [x] Probe retry limit (max 50)
+- [x] System debloat (~3GB freed)
+- [x] Hardcoded DNS removal
+- [x] chmod 777 cleanup
+- [x] Python 2 unicode() fix
+- [x] Spoolman config (commented)

@@ -150,20 +150,25 @@ If the printer is unresponsive and USB flashing does not work, follow the offici
 - [x] Full eMMC backup instructions
 - [x] GitHub release (v0.5.3)
 - [x] PLR Python 3 fix (buffering bug)
+- [x] Probe retry limit (max 50, prevents infinite calibration loop)
+- [x] System debloat (~3GB freed — removes cross-compilers, XFCE, CUPS, Python 2, etc.)
+- [x] Hardcoded DNS removal (Chinese DNS replaced with DHCP + Cloudflare/Google fallback)
+- [x] chmod 777 cleanup (stock 777/666 swept to proper 755/644)
+- [x] Python 2 `unicode()` fix in display/menu.py
+- [x] Spoolman config (commented, ready for external Spoolman server)
 
 ### Pending (Deferred — Higher Risk)
 
 - [ ] **Gcode macros** — Improved START_PRINT/END_PRINT, pause/resume macros. Directly affects print behavior so needs careful testing.
-- [ ] **chmod 777 cleanup** — Stock firmware sets 777 on many files/dirs. We fixed new files (755/644) but didn't sweep existing stock files. Risk: xindi or other stock binaries may depend on world-writable permissions.
-- [ ] **Hardcoded DNS removal** — Stock firmware hardcodes Chinese DNS servers. Should be switched to DHCP-provided DNS. Risk: could break network on some setups.
-- [ ] **Other Python 2→3 landmines** — We found the `buffering=0` one during printing. There could be more lurking in rarely-executed code paths (error handlers, edge cases in PLR recovery, filament runout handling, etc.).
+- [ ] **Other Python 2→3 landmines** — We found `buffering=0` and `unicode()` so far. There could be more lurking in rarely-executed code paths (error handlers, PLR recovery edge cases, filament runout handling, etc.).
 
 ### Nice-to-Haves (Future Releases)
 
 - [ ] **MCU firmware upgrade** (v0.10 → v0.13) — requires careful flashing procedure, biggest remaining upgrade
 - [ ] **Camera/webcam integration improvements**
-- [ ] **KAMP** (Klipper Adaptive Meshing & Purging) — already partially present in config
+- [ ] **KAMP** (Klipper Adaptive Meshing & Purging) — already integrated, needs slicer config + docs
 - [ ] **Moonraker notifications** (Telegram/Pushover on print events)
+- [ ] **Spoolman** — filament tracking (requires Docker or Python 3.9+ on external host)
 
 ## Known Limitations
 
