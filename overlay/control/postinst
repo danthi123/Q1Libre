@@ -293,6 +293,8 @@ echo "/thirdparty" >> .git/info/exclude
  git reset --hard $VENDORED_SHA 2>/dev/null && \
  git branch --set-upstream-to=origin/master master 2>/dev/null && \
  echo "/moonraker/components/timelapse.py" >> /home/mks/moonraker/.git/info/exclude 2>/dev/null && \
+ ln -sf /home/mks/moonraker-timelapse/component/timelapse.py /home/mks/moonraker/moonraker/components/timelapse.py 2>/dev/null && \
+ chown -h mks:mks /home/mks/moonraker/moonraker/components/timelapse.py 2>/dev/null && \
  chown -R mks:mks /home/mks/moonraker/.git && \
  echo "Q1Libre: moonraker git fetch complete") &
 MOONRAKER_GIT_PID=$!
