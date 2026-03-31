@@ -348,6 +348,18 @@ curl -s -X POST http://127.0.0.1:7125/printer/firmware_restart >/dev/null 2>&1
 echo "Q1Libre: services restarted"
 
 # ═══════════════════════════════════════════════════════════════
+# Q1Libre: printer.cfg fixes (safe idempotent patches)
+# ═══════════════════════════════════════════════════════════════
+PCFG=/home/mks/klipper_config/printer.cfg
+if [ -f "$PCFG" ]; then
+    # Enable filament runout sensor (Qidi ships it disabled)
+    sed -i '/^\[hall_filament_width_sensor\]/,/^\[/{s/^enable: false/enable: true/}' "$PCFG"
+    # Loosen probe tolerance from 0.05 to 0.10 (Klipper default, avoids excessive retries)
+    sed -i 's/^samples_tolerance: 0\.05$/samples_tolerance: 0.10/' "$PCFG"
+    echo "Q1Libre: printer.cfg patched (filament sensor, probe tolerance)"
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # Post-restart tasks (run AFTER services are up so user gets a working printer fast)
 # ═══════════════════════════════════════════════════════════════
 

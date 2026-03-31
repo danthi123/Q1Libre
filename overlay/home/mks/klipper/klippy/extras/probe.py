@@ -179,12 +179,9 @@ class PrinterProbe:
         probexy = self.printer.lookup_object('toolhead').get_position()[:2]
         start_z = self.printer.lookup_object('toolhead').get_position()[2]
         retries = 0
-        total_retries = 0
-        max_total_retries = 50
         positions = []
         gcode = self.gcode
         last_probe_failed = False
-        probe_gave_up = False
         while len(positions) < sample_count:
             # Probe position
             pos = self._probe(speed)
@@ -192,14 +189,6 @@ class PrinterProbe:
             # Check samples tolerance
             z_positions = [p[2] for p in positions]
             if max(z_positions) - min(z_positions) > samples_tolerance:
-                total_retries += 1
-                if total_retries >= max_total_retries:
-                    gcmd.respond_info(
-                        "Q1Libre: Probe failed after %d total retries."
-                        " Skipping bed leveling and continuing print."
-                        % max_total_retries)
-                    probe_gave_up = True
-                    break
                 if retries >= samples_retries:
                     #raise gcmd.error("Probe samples exceed samples_tolerance")
                     self._move(probexy + [start_z], lift_speed)
@@ -210,8 +199,7 @@ class PrinterProbe:
                     gcode._process_commands(commands, False)
                     retries=0
                     positions = []
-                gcmd.respond_info("Probe samples exceed tolerance. Retrying... (%d/%d)"
-                                  % (total_retries, max_total_retries))
+                gcmd.respond_info("Probe samples exceed tolerance. Retrying...")
                 last_probe_failed = True
                 retries += 1
                 positions = []
@@ -233,8 +221,8 @@ class PrinterProbe:
                     last_probe_failed = False
         if must_notify_multi_probe:
             self.multi_probe_end()
-        # Q1Libre: if probe gave up, return last known position
-        if probe_gave_up or not positions:
+        # Fallback if no positions collected
+        if not positions:
             if positions:
                 return self._calc_mean(positions)
             return list(probexy) + [0.]
