@@ -221,11 +221,8 @@ class PrinterProbe:
                     last_probe_failed = False
         if must_notify_multi_probe:
             self.multi_probe_end()
-        # Fallback if no positions collected
         if not positions:
-            if positions:
-                return self._calc_mean(positions)
-            return list(probexy) + [0.]
+            raise gcmd.error("Probe failed: no valid positions collected")
         # Calculate and return result
         if samples_result == 'median':
             return self._calc_median(positions)
