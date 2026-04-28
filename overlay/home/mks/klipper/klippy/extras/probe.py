@@ -182,10 +182,19 @@ class PrinterProbe:
         positions = []
         gcode = self.gcode
         last_probe_failed = False
+        # Q1Libre: detect a flaky probe that locks onto one of multiple
+        # inconsistent trigger heights (clusters). Track every probe attempt
+        # in this run_probe call, plus an outer retry-cycle cap so a
+        # repeatedly-failing probe can't loop forever.
+        all_attempts_z = []
+        total_retry_cycles = 0
+        MAX_TOTAL_RETRY_CYCLES = 20
+        CLUSTER_ABORT_THRESHOLD = 1.0
         while len(positions) < sample_count:
             # Probe position
             pos = self._probe(speed)
             positions.append(pos)
+            all_attempts_z.append(pos[2])
             # Check samples tolerance
             z_positions = [p[2] for p in positions]
             if max(z_positions) - min(z_positions) > samples_tolerance:
@@ -199,6 +208,18 @@ class PrinterProbe:
                     gcode._process_commands(commands, False)
                     retries=0
                     positions = []
+                    total_retry_cycles += 1
+                    if total_retry_cycles >= MAX_TOTAL_RETRY_CYCLES:
+                        if must_notify_multi_probe:
+                            self.multi_probe_end()
+                        raise gcmd.error(
+                            "Probe failed: %d retry cycles without "
+                            "converging (spread %.3f mm across %d "
+                            "attempts). Probe hardware appears unreliable; "
+                            "aborting to avoid bad Z reference."
+                            % (total_retry_cycles,
+                               max(all_attempts_z) - min(all_attempts_z),
+                               len(all_attempts_z)))
                 gcmd.respond_info("Probe samples exceed tolerance. Retrying...")
                 last_probe_failed = True
                 retries += 1
@@ -223,6 +244,18 @@ class PrinterProbe:
             self.multi_probe_end()
         if not positions:
             raise gcmd.error("Probe failed: no valid positions collected")
+        # Q1Libre: even though the final samples agreed within tolerance, the
+        # probe may have locked onto one of several inconsistent clusters
+        # during retries. Refuse to trust the result if the full attempt
+        # history spans more than CLUSTER_ABORT_THRESHOLD.
+        attempt_spread = max(all_attempts_z) - min(all_attempts_z)
+        if attempt_spread > CLUSTER_ABORT_THRESHOLD:
+            raise gcmd.error(
+                "Probe failed: readings span %.3f mm across %d attempts "
+                "(threshold %.1f mm). Probe is hitting multiple trigger "
+                "heights; aborting to avoid bad Z reference."
+                % (attempt_spread, len(all_attempts_z),
+                   CLUSTER_ABORT_THRESHOLD))
         # Calculate and return result
         if samples_result == 'median':
             return self._calc_median(positions)
