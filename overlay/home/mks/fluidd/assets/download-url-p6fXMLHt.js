@@ -1,0 +1,1 @@
+import{t as e}from"./browser-DuoYjt58.js";var t=(t,n)=>{try{let e=document.createElement(`a`);e.href=n,e.download=t,e.target=`_blank`,document.body.appendChild(e),e.click(),document.body.removeChild(e)}catch(t){e.error(`[DownloadUrl] error`,t)}};export{t};

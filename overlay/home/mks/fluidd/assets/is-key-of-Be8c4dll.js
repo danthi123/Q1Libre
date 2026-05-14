@@ -1,0 +1,1 @@
+var e=(e,t)=>e in t;export{e as t};

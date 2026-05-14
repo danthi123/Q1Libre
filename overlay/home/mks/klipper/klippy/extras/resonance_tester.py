@@ -160,7 +160,16 @@ class ResonanceTester:
         calibration_data = {axis: None for axis in axes}
 
         self.test.prepare_test(gcmd)
-        test_points = self.test.get_start_test_points()
+        # Q1Libre: allow POINT=x,y,z parameter to override config probe_points
+        point_str = gcmd.get("POINT", None)
+        if point_str is not None:
+            try:
+                coords = [float(c.strip()) for c in point_str.split(",")]
+                test_points = [coords]
+            except ValueError:
+                raise gcmd.error("Invalid POINT parameter: %s" % point_str)
+        else:
+            test_points = self.test.get_start_test_points()
         for point in test_points:
             toolhead.manual_move(point, self.move_speed)
             if len(test_points) > 1:

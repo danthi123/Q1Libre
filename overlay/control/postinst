@@ -359,6 +359,45 @@ if [ -f "$PCFG" ]; then
     echo "Q1Libre: printer.cfg patched (filament sensor, probe tolerance)"
 fi
 
+# Q1Libre: PRINT_START reorder — probe BEFORE heating the nozzle. The
+# strain-gauge probe uses the nozzle tip as the contact surface, and a
+# residual molten bead at the post-CLEAR_NOZZLE 140 C state produces
+# inconsistent multi-cluster trigger heights that ruin G29.
+GMC=/home/mks/klipper_config/gcode_macro.cfg
+if [ -f "$GMC" ] && ! grep -q "Q1Libre: probe before heating" "$GMC"; then
+    python3 - "$GMC" <<'PYEOF'
+import sys
+p = sys.argv[1]
+src = open(p).read()
+old = (
+    "    G28    \n"
+    "    CLEAR_NOZZLE HOTEND={hotendtemp}\n"
+    "\n"
+    "    M190 S{bedtemp}   \n"
+    "#    Z_TILT_ADJUST\n"
+    "    G29\n"
+    "    G0 Z50 F600\n"
+)
+new = (
+    "    G28\n"
+    "\n"
+    "    M190 S{bedtemp}\n"
+    "#    Z_TILT_ADJUST\n"
+    "    # Q1Libre: probe before heating nozzle. Strain-gauge probe uses the\n"
+    "    # nozzle tip as contact, and a residual bead at 140C (post-CLEAR_NOZZLE)\n"
+    "    # gives multiple inconsistent trigger heights. Probing cold avoids it.\n"
+    "    G29\n"
+    "    CLEAR_NOZZLE HOTEND={hotendtemp}\n"
+    "    G0 Z50 F600\n"
+)
+if old in src:
+    open(p, "w").write(src.replace(old, new))
+    print("Q1Libre: gcode_macro.cfg PRINT_START patched (probe before heat)")
+else:
+    print("Q1Libre: gcode_macro.cfg PRINT_START unfamiliar shape; not patched")
+PYEOF
+fi
+
 # ═══════════════════════════════════════════════════════════════
 # Post-restart tasks (run AFTER services are up so user gets a working printer fast)
 # ═══════════════════════════════════════════════════════════════
