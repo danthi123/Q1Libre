@@ -398,6 +398,37 @@ else:
 PYEOF
 fi
 
+# Q1Libre: PRINT_START warmup probe — single throwaway probe before G29
+# to absorb the "first probe after idle" outlier (~0.018mm) characterized
+# on a 50-sample PROBE_ACCURACY run. Cheap insurance against G29's
+# samples=2 tolerance check failing because the first sample is anomalous.
+if [ -f "$GMC" ] && ! grep -q "Q1Libre: warmup probe" "$GMC"; then
+    python3 - "$GMC" <<'PYEOF'
+import sys
+p = sys.argv[1]
+src = open(p).read()
+old = (
+    "    # gives multiple inconsistent trigger heights. Probing cold avoids it.\n"
+    "    G29\n"
+)
+new = (
+    "    # gives multiple inconsistent trigger heights. Probing cold avoids it.\n"
+    "    # Q1Libre: warmup probe — single touch first to absorb the\n"
+    "    # first-probe-after-idle outlier (~0.018mm) so G29 sees stable readings.\n"
+    "    G1 X{120 - printer.probe[\"x_offset\"]} Y{120 - printer.probe[\"y_offset\"]} F9000\n"
+    "    G1 Z10 F600\n"
+    "    PROBE SAMPLES=1 SAMPLES_TOLERANCE_RETRIES=0\n"
+    "    G1 Z10 F600\n"
+    "    G29\n"
+)
+if old in src:
+    open(p, "w").write(src.replace(old, new))
+    print("Q1Libre: gcode_macro.cfg PRINT_START patched (warmup probe)")
+else:
+    print("Q1Libre: gcode_macro.cfg PRINT_START unfamiliar shape; warmup not patched")
+PYEOF
+fi
+
 # ═══════════════════════════════════════════════════════════════
 # Post-restart tasks (run AFTER services are up so user gets a working printer fast)
 # ═══════════════════════════════════════════════════════════════
