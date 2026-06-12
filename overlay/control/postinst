@@ -429,6 +429,35 @@ else:
 PYEOF
 fi
 
+# Q1Libre: arm auto-recovery on the G29 reference probe. Q1_RECOVER=1 opts
+# this single probe call into the probe.py re-home-and-retry behaviour, so an
+# intermittent multi-cluster fault self-heals (re-home, like a manual restart)
+# instead of aborting the print with errors on the screen. Only this probe is
+# armed — homing-internal probes, the warmup probe, and mesh points must NOT
+# recover (re-homing from those contexts is unsafe).
+if [ -f "$GMC" ] && ! grep -q "probe Q1_RECOVER=1" "$GMC"; then
+    python3 - "$GMC" <<'PYEOF'
+import sys
+p = sys.argv[1]
+src = open(p).read()
+old = (
+    "        G1 Z10 F600\n"
+    "        probe\n"
+    "        save_meshoffset\n"
+)
+new = (
+    "        G1 Z10 F600\n"
+    "        probe Q1_RECOVER=1\n"
+    "        save_meshoffset\n"
+)
+if old in src:
+    open(p, "w").write(src.replace(old, new))
+    print("Q1Libre: gcode_macro.cfg G29 reference probe armed (Q1_RECOVER=1)")
+else:
+    print("Q1Libre: gcode_macro.cfg G29 unfamiliar shape; recovery not armed")
+PYEOF
+fi
+
 # ═══════════════════════════════════════════════════════════════
 # Post-restart tasks (run AFTER services are up so user gets a working printer fast)
 # ═══════════════════════════════════════════════════════════════
