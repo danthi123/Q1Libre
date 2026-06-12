@@ -80,6 +80,7 @@ def build_firmware(
     patches_dir: Path,
     output_path: Path,
     q1libre_version: str,
+    check_fork_sync: bool = True,
 ) -> None:
     """Build a patched firmware .deb from base, overlays, and patches.
 
@@ -95,6 +96,13 @@ def build_firmware(
     overlay_dir = Path(overlay_dir)
     patches_dir = Path(patches_dir)
     output_path = Path(output_path)
+
+    # Guard: the install reverts vendored Klipper to fork@KLIPPER_SHA, so any
+    # overlay Klipper change not pushed to the fork silently never ships.
+    if check_fork_sync:
+        from tools.check_fork_sync import verify_klipper_fork_sync
+
+        verify_klipper_fork_sync(overlay_dir, overlay_dir / "control" / "postinst")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         work = Path(tmpdir) / "work"
@@ -195,6 +203,10 @@ def main() -> None:
         "--update-deps", action="store_true",
         help="Fetch latest stable Klipper, Moonraker, and Fluidd before building",
     )
+    parser.add_argument(
+        "--skip-fork-check", action="store_true",
+        help="Skip the Klipper overlay/fork-sync guard (not recommended)",
+    )
     args = parser.parse_args()
 
     if args.update_deps:
@@ -211,6 +223,7 @@ def main() -> None:
         patches_dir=Path(args.patches),
         output_path=Path(output),
         q1libre_version=args.version,
+        check_fork_sync=not args.skip_fork_check,
     )
 
 

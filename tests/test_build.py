@@ -87,6 +87,7 @@ def test_build_produces_valid_deb():
             patches_dir=patches,
             output_path=output,
             q1libre_version="0.1.0",
+            check_fork_sync=False,
         )
 
         # --- Verify output ---
@@ -156,7 +157,7 @@ def test_control_overlay_applied():
         (ctrl_overlay / "postinst").write_text("#!/bin/sh\n# Q1LIBRE patched postinst\nexit 0\n")
 
         output.parent.mkdir(parents=True)
-        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0")
+        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0", check_fork_sync=False)
 
         assert output.exists()
 
@@ -196,7 +197,7 @@ def test_control_overlay_not_in_data():
         (overlay / "control" / "postinst").write_text("#!/bin/sh\n# PATCHED\nexit 0\n")
 
         output.parent.mkdir(parents=True)
-        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0")
+        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0", check_fork_sync=False)
 
         from tools.deb import parse_deb
         parts = parse_deb(output.read_bytes())
@@ -238,7 +239,7 @@ def test_control_overlay_empty_dir_does_not_pollute_data():
         (data_overlay / "test.txt").write_text("hello\n")
 
         output.parent.mkdir(parents=True)
-        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0")
+        build_firmware(base, overlay, tmp / "patches", output, q1libre_version="0.1.0", check_fork_sync=False)
 
         from tools.deb import parse_deb
         parts = parse_deb(output.read_bytes())
@@ -331,3 +332,63 @@ def test_phase2b_version_string():
     spec.loader.exec_module(mod)
     assert hasattr(mod, "DEFAULT_VERSION"), "build.py must have DEFAULT_VERSION constant"
     assert "0.5.16" in mod.DEFAULT_VERSION, f"Expected 0.5.16 in version, got: {mod.DEFAULT_VERSION!r}"
+
+
+def test_klipper_fork_sync_helpers():
+    """Fork-sync guard: SHA parsing + drift detection logic (offline-safe)."""
+    from tools.check_fork_sync import (
+        ForkSyncError,
+        _normalize,
+        read_klipper_sha,
+        verify_klipper_fork_sync,
+    )
+
+    # SHA extraction from a postinst snippet.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        postinst = Path(tmpdir) / "postinst"
+        sha = "a77f6ffc8240f227e1a1f3d5ff6d8ad5e8d2b6d4"
+        postinst.write_text(f'#!/bin/bash\nKLIPPER_SHA="{sha}"\n', encoding="utf-8")
+        assert read_klipper_sha(postinst) == sha
+
+        # Missing SHA must raise.
+        bad = Path(tmpdir) / "postinst_bad"
+        bad.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
+        try:
+            read_klipper_sha(bad)
+            assert False, "expected ForkSyncError for missing SHA"
+        except ForkSyncError:
+            pass
+
+    # Line-ending normalization makes CRLF working copies compare equal.
+    assert _normalize(b"a\r\nb\rc") == b"a\nb\nc"
+
+    # Network failure with offline_ok=True is non-fatal (returns None).
+    with tempfile.TemporaryDirectory() as tmpdir:
+        overlay = Path(tmpdir) / "overlay"
+        (overlay / "home" / "mks" / "klipper" / "klippy").mkdir(parents=True)
+        postinst = overlay / "control" / "postinst"
+        postinst.parent.mkdir(parents=True)
+        postinst.write_text(
+            '#!/bin/bash\nKLIPPER_SHA="' + "0" * 40 + '"\n', encoding="utf-8"
+        )
+        import tools.check_fork_sync as cfs
+
+        original = cfs._fetch_fork_tree
+        cfs._fetch_fork_tree = _raise_urlerror
+        try:
+            # Should print a warning and return without raising.
+            verify_klipper_fork_sync(overlay, postinst, offline_ok=True)
+            # With offline_ok=False the same failure must raise.
+            try:
+                verify_klipper_fork_sync(overlay, postinst, offline_ok=False)
+                assert False, "expected ForkSyncError when offline_ok=False"
+            except ForkSyncError:
+                pass
+        finally:
+            cfs._fetch_fork_tree = original
+
+
+def _raise_urlerror(_sha, timeout=30.0):
+    import urllib.error
+
+    raise urllib.error.URLError("simulated offline")
