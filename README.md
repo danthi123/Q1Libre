@@ -34,9 +34,11 @@ GitHub: <https://github.com/danthi123/Q1Libre>
 
 Backing up before flashing any firmware is strongly recommended.
 
-### Full System Backup (Advanced -- Recommended)
+### Full System Backup (Essential -- Do This First)
 
-Create a complete image of the printer's eMMC. This is the only way to fully restore your printer to its exact current state, including all configs, calibration, wifi setup, and installed software.
+> **Read this before you install.** A full eMMC backup is your *only* practical route back to your exact prior state. Q1Libre is **not cleanly reversible over USB or SSH** — flashing stock firmware on top of it will not restore stock and will break Klipper (see [Rollback / Recovery](#rollback--recovery) for why). The genuine path back is a block-level eMMC re-flash, and that requires this backup image (or the factory image) plus an **eMMC adapter** and the physical [flash-emmc procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc). If you skip this backup, you cannot return to your exact current setup.
+
+Create a complete image of the printer's eMMC. This captures all configs, calibration, wifi setup, and installed software exactly as they are now.
 
 From your computer:
 
@@ -44,7 +46,7 @@ From your computer:
 ssh root@<printer-ip> "dd if=/dev/mmcblk1 bs=4M status=progress" > q1pro_backup.img
 ```
 
-This creates a full disk image (~14.5 GB for the 16 GB eMMC) and takes approximately 20 minutes over SSH. Store it somewhere safe. If you ever need to do a full restore, follow the [official eMMC flash procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc) using this image instead of the factory image.
+This creates a full disk image (~14.5 GB for the 16 GB eMMC) and takes approximately 20 minutes over SSH. Store it somewhere safe. To restore it later you follow the [official eMMC flash procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc) using this image instead of the factory image — note that restoring also requires physically accessing the eMMC with an adapter.
 
 ### Configuration Backup (Quick)
 
@@ -109,24 +111,39 @@ Both methods support **offline** and **online** installations -- the printer doe
 
 ## Rollback / Recovery
 
-### Restore stock firmware
+> **Important:** Flashing stock firmware over Q1Libre via USB does **not** cleanly revert the install — it leaves the printer non-functional. The only reliable ways back to stock are block-level eMMC re-flashes, both of which require an eMMC adapter and the physical flash procedure. Plan accordingly.
 
-Download the official V4.4.24 firmware from the [QIDI Q1 Pro releases page](https://github.com/QIDITECH/QIDI_Q1_Pro/releases), place it in `QD_Update/` on a USB stick, and flash the same way.
+### Why you can't just re-flash stock over USB
 
-### Restore from full system backup
+The official `QD_Q1_SOC` package is a thin (~6.6 MB) overlay: about 30 Qidi-custom Klipper files shipped as **Python 2.7 bytecode** (`.pyc`), plus configs. It assumes the complete factory Klipper **and a Python 2 interpreter** already exist underneath it — both of which come from the factory eMMC image.
 
-If you created a full eMMC backup image before flashing (see [Backup](#full-system-backup-advanced--recommended) above), you can restore it using the [official eMMC flash procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc) with your backup image instead of the factory image:
+Q1Libre makes two changes that this overlay cannot undo, and that cannot be reconstructed over SSH:
+
+- **Klipper is migrated from Python 2 to Python 3**, and klippy-env is rebuilt for Python 3.
+- **The debloat step purges ~3 GB of packages** — including **Python 2 itself**, the XFCE desktop, CUPS, the dev toolchain, fonts, locales, and docs — then clears the apt cache and disables the Qidi apt mirror.
+
+If you flash stock firmware on top of Q1Libre, the stock Python 2 `.pyc` files get loaded by Python 3 and fail with `ImportError: bad magic number`, so **Klipper will not start**. The `moonraker.service` unit is also removed. The printer is left non-functional, and because the `.deb` cache is gone and the apt mirror is unreachable, the missing pieces cannot be reinstalled over SSH. (Reinstalling Q1Libre will get the printer working again, but it will not get you back to stock.)
+
+### The only reliable ways back to stock
+
+Both require an **eMMC adapter** and the official, physical [flash-emmc procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc) — there is no on-board USB or maskrom shortcut on the Q1 Pro. You will need to open the electronics enclosure and access the eMMC from a separate computer.
+
+**Option 1 — Restore from your full eMMC backup (returns you to your exact prior state).**
+If you made a full eMMC image before installing (see [Backup](#full-system-backup-essential--do-this-first) above), write it back with the eMMC flash procedure:
 
 1. Follow the eMMC flash guide to connect to the printer's eMMC storage from your computer.
-2. Use a tool like [balenaEtcher](https://etcher.balena.io/) or `dd` to write your `q1pro_backup.img` to the eMMC:
+2. Use [balenaEtcher](https://etcher.balena.io/) or `dd` to write your backup to the eMMC:
    ```bash
    dd if=q1pro_backup.img of=/dev/<emmc-device> bs=4M status=progress
    ```
-3. This restores your printer to the exact state it was in when the backup was taken, including all configs, calibration data, and wifi settings.
+3. This restores the printer exactly as it was when the backup was taken — configs, calibration, wifi, and all installed software.
+
+**Option 2 — Restore the factory image.**
+If you have no backup, download the factory eMMC image and write it the same way, following the [flash-emmc procedure](https://wiki.qidi3d.com/en/Memo/flash-emmc). This returns the printer to factory state but does not recover any of your prior configuration.
 
 ### Worst-case recovery (bricked printer)
 
-If the printer is unresponsive and USB flashing does not work, follow the official eMMC flash procedure with the factory image:
+If the printer is unresponsive and USB flashing does not work, the recovery path is the same block-level eMMC re-flash described above (backup image or factory image):
 
 <https://wiki.qidi3d.com/en/Memo/flash-emmc>
 

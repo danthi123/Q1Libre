@@ -227,7 +227,7 @@ fi
 
 # Git repo setup for klipper
 KLIPPER_VERSION="v0.13.0-q1pro"
-KLIPPER_SHA="a77f6ffc8240f227e1a1f3d5ff6d8ad5e8d2b6d4"
+KLIPPER_SHA="bc8ad1f065e018779c505aabfa027691a772d5c4"
 cd /home/mks/klipper
 rm -rf .git
 git init 2>/dev/null
@@ -354,64 +354,39 @@ PCFG=/home/mks/klipper_config/printer.cfg
 if [ -f "$PCFG" ]; then
     # Enable filament runout sensor (Qidi ships it disabled)
     sed -i '/^\[hall_filament_width_sensor\]/,/^\[/{s/^enable: false/enable: true/}' "$PCFG"
-    # Loosen probe tolerance from 0.05 to 0.10 (Klipper default, avoids excessive retries)
-    sed -i 's/^samples_tolerance: 0\.05$/samples_tolerance: 0.10/' "$PCFG"
-    echo "Q1Libre: printer.cfg patched (filament sensor, probe tolerance)"
+    # Q1Libre: restore the probe sampling values from Qidi firmware 4.4.6, which
+    # probes reliably. Qidi changed these in 4.4.24 (submaxmin / retract 5.0 /
+    # tap_thresh 3500) and that revision causes intermittent multi-cluster Z
+    # trigger failures on the strain-gauge probe; the 4.4.6 values fix it at the
+    # source (verified on-printer: clean first-try probing across full prints).
+    sed -i 's/^samples_result: submaxmin$/samples_result: median/' "$PCFG"
+    sed -i 's/^sample_retract_dist: 5\.0$/sample_retract_dist: 3.0/' "$PCFG"
+    sed -i 's/^samples_tolerance: 0\.[0-9]*$/samples_tolerance: 0.08/' "$PCFG"
+    sed -i 's/^#\*# tap_thresh = 3500$/#*# tap_thresh = 4000/' "$PCFG"
+    echo "Q1Libre: printer.cfg patched (filament sensor, 4.4.6 probe values)"
 fi
 
-# Q1Libre: PRINT_START reorder — probe BEFORE heating the nozzle. The
-# strain-gauge probe uses the nozzle tip as the contact surface, and a
-# residual molten bead at the post-CLEAR_NOZZLE 140 C state produces
-# inconsistent multi-cluster trigger heights that ruin G29.
+# Q1Libre: restore stock PRINT_START probe order. Earlier releases (v0.5.13-
+# v0.5.16) reordered PRINT_START to probe cold, added a warmup probe, and armed
+# auto-recovery — all scaffolding chasing the multi-cluster probe fault. That
+# fault is now fixed at the source by the 4.4.6 probe values above, so this
+# reverts PRINT_START to stock order and un-arms the (now-removed) auto-recovery.
+# Idempotent: only rewrites a previously-patched config; fresh stock is already
+# in this form.
 GMC=/home/mks/klipper_config/gcode_macro.cfg
-if [ -f "$GMC" ] && ! grep -q "Q1Libre: probe before heating" "$GMC"; then
+if [ -f "$GMC" ]; then
     python3 - "$GMC" <<'PYEOF'
 import sys
 p = sys.argv[1]
 src = open(p).read()
-old = (
-    "    G28    \n"
-    "    CLEAR_NOZZLE HOTEND={hotendtemp}\n"
-    "\n"
-    "    M190 S{bedtemp}   \n"
-    "#    Z_TILT_ADJUST\n"
-    "    G29\n"
-    "    G0 Z50 F600\n"
-)
-new = (
+orig = src
+patched = (
     "    G28\n"
     "\n"
     "    M190 S{bedtemp}\n"
     "#    Z_TILT_ADJUST\n"
     "    # Q1Libre: probe before heating nozzle. Strain-gauge probe uses the\n"
     "    # nozzle tip as contact, and a residual bead at 140C (post-CLEAR_NOZZLE)\n"
-    "    # gives multiple inconsistent trigger heights. Probing cold avoids it.\n"
-    "    G29\n"
-    "    CLEAR_NOZZLE HOTEND={hotendtemp}\n"
-    "    G0 Z50 F600\n"
-)
-if old in src:
-    open(p, "w").write(src.replace(old, new))
-    print("Q1Libre: gcode_macro.cfg PRINT_START patched (probe before heat)")
-else:
-    print("Q1Libre: gcode_macro.cfg PRINT_START unfamiliar shape; not patched")
-PYEOF
-fi
-
-# Q1Libre: PRINT_START warmup probe — single throwaway probe before G29
-# to absorb the "first probe after idle" outlier (~0.018mm) characterized
-# on a 50-sample PROBE_ACCURACY run. Cheap insurance against G29's
-# samples=2 tolerance check failing because the first sample is anomalous.
-if [ -f "$GMC" ] && ! grep -q "Q1Libre: warmup probe" "$GMC"; then
-    python3 - "$GMC" <<'PYEOF'
-import sys
-p = sys.argv[1]
-src = open(p).read()
-old = (
-    "    # gives multiple inconsistent trigger heights. Probing cold avoids it.\n"
-    "    G29\n"
-)
-new = (
     "    # gives multiple inconsistent trigger heights. Probing cold avoids it.\n"
     "    # Q1Libre: warmup probe — single touch first to absorb the\n"
     "    # first-probe-after-idle outlier (~0.018mm) so G29 sees stable readings.\n"
@@ -420,41 +395,27 @@ new = (
     "    PROBE SAMPLES=1 SAMPLES_TOLERANCE_RETRIES=0\n"
     "    G1 Z10 F600\n"
     "    G29\n"
+    "    CLEAR_NOZZLE HOTEND={hotendtemp}\n"
+    "    G0 Z50 F600\n"
 )
-if old in src:
-    open(p, "w").write(src.replace(old, new))
-    print("Q1Libre: gcode_macro.cfg PRINT_START patched (warmup probe)")
+stock = (
+    "    G28\n"
+    "    CLEAR_NOZZLE HOTEND={hotendtemp}\n"
+    "\n"
+    "    M190 S{bedtemp}\n"
+    "#    Z_TILT_ADJUST\n"
+    "    G29\n"
+    "    G0 Z50 F600\n"
+)
+if patched in src:
+    src = src.replace(patched, stock)
+# Un-arm auto-recovery (removed in this release)
+src = src.replace("        probe Q1_RECOVER=1\n", "        probe\n")
+if src != orig:
+    open(p, "w").write(src)
+    print("Q1Libre: gcode_macro.cfg PRINT_START reverted to stock probe order")
 else:
-    print("Q1Libre: gcode_macro.cfg PRINT_START unfamiliar shape; warmup not patched")
-PYEOF
-fi
-
-# Q1Libre: arm auto-recovery on the G29 reference probe. Q1_RECOVER=1 opts
-# this single probe call into the probe.py re-home-and-retry behaviour, so an
-# intermittent multi-cluster fault self-heals (re-home, like a manual restart)
-# instead of aborting the print with errors on the screen. Only this probe is
-# armed — homing-internal probes, the warmup probe, and mesh points must NOT
-# recover (re-homing from those contexts is unsafe).
-if [ -f "$GMC" ] && ! grep -q "probe Q1_RECOVER=1" "$GMC"; then
-    python3 - "$GMC" <<'PYEOF'
-import sys
-p = sys.argv[1]
-src = open(p).read()
-old = (
-    "        G1 Z10 F600\n"
-    "        probe\n"
-    "        save_meshoffset\n"
-)
-new = (
-    "        G1 Z10 F600\n"
-    "        probe Q1_RECOVER=1\n"
-    "        save_meshoffset\n"
-)
-if old in src:
-    open(p, "w").write(src.replace(old, new))
-    print("Q1Libre: gcode_macro.cfg G29 reference probe armed (Q1_RECOVER=1)")
-else:
-    print("Q1Libre: gcode_macro.cfg G29 unfamiliar shape; recovery not armed")
+    print("Q1Libre: gcode_macro.cfg PRINT_START already stock order")
 PYEOF
 fi
 

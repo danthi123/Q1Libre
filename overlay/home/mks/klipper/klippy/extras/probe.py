@@ -35,10 +35,6 @@ class PrinterProbe:
         self.vibrate_gcode = gcode_macro.load_template(
             config.getsection('bed_mesh'), 'vibrate_gcode', '')
         self.probe_count = 0
-        # Q1Libre: re-entrancy guard for auto-recovery. G28 (Z homing) itself
-        # issues `probe` commands, so a recovery that re-homes must not let
-        # those nested probes trigger another recovery.
-        self._q1_in_recovery = False
         self.vibrate = config.getsection('bed_mesh').getint('vibrate', _NERVER)
         # Infer Z position to move to during a probe
         if config.has_section('stepper_z'):
@@ -166,60 +162,7 @@ class PrinterProbe:
             return z_sorted[middle]
         # even number of samples
         return self._calc_mean(z_sorted[middle-1:middle+1])
-    # Q1Libre: number of full re-home-and-retry recoveries for a standalone
-    # probe (the G29 reference point / PROBE command) before giving up. The
-    # intermittent multi-cluster fault reliably clears after a re-home, the
-    # same way a manual print restart recovers it.
-    Q1_RECOVERY_ATTEMPTS = 2
-
     def run_probe(self, gcmd):
-        # Auto-recovery is opt-in via Q1_RECOVER=1 — only the G29 reference
-        # probe passes it. Homing-internal probes (G28 calls `probe` while
-        # establishing Z), the warmup probe, and mesh points never do, so the
-        # recovery action (a full re-home, which itself probes) can never be
-        # triggered from a context where re-homing would be unsafe. The
-        # re-entrancy flag is belt-and-suspenders against the recovery's own
-        # G28 probes.
-        want_recover = gcmd.get_int("Q1_RECOVER", 0)
-        budget = self.Q1_RECOVERY_ATTEMPTS \
-            if (want_recover and not self._q1_in_recovery) else 0
-        toolhead = self.printer.lookup_object('toolhead')
-        probexy = toolhead.get_position()[:2]
-        attempt = 0
-        while True:
-            try:
-                return self._q1_run_probe_once(gcmd)
-            except self.printer.command_error as e:
-                # Only recover from our own flaky-probe aborts, and only while
-                # we still have budget. Anything else propagates unchanged.
-                if attempt >= budget or 'Probe failed' not in str(e):
-                    raise
-                attempt += 1
-                gcmd.respond_info(
-                    "Q1Libre: probe unreliable (%s). Re-homing and "
-                    "retrying (%d/%d)..." % (str(e), attempt, budget))
-                self._q1_probe_recovery(gcmd, probexy)
-
-    def _q1_probe_recovery(self, gcmd, probexy):
-        # Lift clear, re-home (clears the intermittent fault the same way a
-        # manual print restart does), then return to the probe XY. Guarded so
-        # the G28's internal homing probes don't trigger nested recovery.
-        self._q1_in_recovery = True
-        try:
-            commands = [
-                'G90',
-                'G1 Z30 F600',
-                'G4 P500',
-                'G28',
-                'G90',
-                'G1 X%.3f Y%.3f F9000' % (probexy[0], probexy[1]),
-                'G1 Z10 F600',
-            ]
-            self.gcode._process_commands(commands, False)
-        finally:
-            self._q1_in_recovery = False
-
-    def _q1_run_probe_once(self, gcmd):
         speed = gcmd.get_float("PROBE_SPEED", self.speed, above=0.)
         lift_speed = self.get_lift_speed(gcmd)
         sample_count = gcmd.get_int("SAMPLES", self.sample_count, minval=1)
